@@ -1,64 +1,28 @@
-"use client"
-
-import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Switch } from "@/components/ui/switch" // Import Switch for toggling featured status
 import Link from "next/link"
-import { createClient } from "@/supabase/client"
-import { getAllAuctions } from "@/lib/auction-data" // Import data functions
-import { toggleLotFeaturedStatus } from "./action" // New action for toggling featured status
+import { createClient } from "@/supabase/server" // Import server-side client
+import { getAllAuctions } from "@/lib/auction-data"
+import { LotFeaturedToggle } from "@/components/admin/lot-featured-toggle" // New client component
 
-export default function AdminDashboardPage() {
-  const [users, setUsers] = useState<any[]>([])
-  const [auctions, setAuctions] = useState<any[]>([])
-  const [lots, setLots] = useState<any[]>([]) // All lots for admin to manage
-  const [loading, setLoading] = useState(true)
-  const [isProfilePending, setIsProfilePending] = useState(false) // Declare the variable
-
+export default async function AdminDashboardPage() {
   const supabase = createClient()
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true)
-      // Fetch users (simplified for now, ideally from profiles table with roles)
-      const { data: fetchedUsers, error: usersError } = await supabase.from("profiles").select("*")
-      if (!usersError) setUsers(fetchedUsers)
-      else console.error("Error fetching users:", usersError)
+  // Fetch data directly in the Server Component
+  const { data: users, error: usersError } = await supabase.from("profiles").select("*")
+  if (usersError) console.error("Error fetching users:", usersError)
 
-      const fetchedAuctions = await getAllAuctions()
-      setAuctions(fetchedAuctions)
+  const auctions = await getAllAuctions()
 
-      const { data: fetchedLots, error: lotsError } = await supabase.from("lots").select("*")
-      if (!lotsError) setLots(fetchedLots)
-      else console.error("Error fetching lots:", lotsError)
-
-      setLoading(false)
-    }
-    fetchData()
-  }, [supabase])
-
-  const handleToggleFeatured = async (lotId: string, currentStatus: boolean) => {
-    const { error, success } = await toggleLotFeaturedStatus({ lotId, isFeatured: !currentStatus })
-    setIsProfilePending(error !== null) // Update isProfilePending based on error
-    if (success) {
-      // Re-fetch lots to update the UI after toggle
-      const { data: updatedLots, error: lotsError } = await supabase.from("lots").select("*")
-      if (!lotsError) setLots(updatedLots)
-      else console.error("Error re-fetching lots:", lotsError)
-    }
-  }
+  const { data: lots, error: lotsError } = await supabase.from("lots").select("*")
+  if (lotsError) console.error("Error fetching lots:", lotsError)
 
   const activeAuctionsCount = auctions.filter((a) => a.status === "active").length
   const pendingLotsCount = lots.filter(
     (l) => l.status === "На рассмотрении" || l.status === "Ожидает утверждения",
   ).length
-
-  if (loading) {
-    return <div className="container py-8 text-center">Загрузка панели администратора...</div>
-  }
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
@@ -71,7 +35,7 @@ export default function AdminDashboardPage() {
             <CardDescription>Всего зарегистрированных пользователей</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold text-primary">{users.length}</p>
+            <p className="text-5xl font-bold text-primary">{users?.length || 0}</p>
           </CardContent>
         </Card>
         <Card>
@@ -98,7 +62,7 @@ export default function AdminDashboardPage() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="users">Пользователи</TabsTrigger>
           <TabsTrigger value="auctions">Аукционы</TabsTrigger>
-          <TabsTrigger value="lots">Управление лотами</TabsTrigger> {/* New tab for lot management */}
+          <TabsTrigger value="lots">Управление лотами</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
           <Card>
@@ -116,7 +80,7 @@ export default function AdminDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => (
+                  {users?.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.email}</TableCell>
                       <TableCell>{user.role}</TableCell>
@@ -158,7 +122,7 @@ export default function AdminDashboardPage() {
                       <TableCell className="font-medium">{auction.title}</TableCell>
                       <TableCell>{auction.status}</TableCell>
                       <TableCell>{auction.category}</TableCell>
-                      <TableCell>{auction.auction_house_id}</TableCell> {/* Display ID for now */}
+                      <TableCell>{auction.auction_house_id}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" className="mr-2 bg-transparent" asChild>
                           <Link href={`/auctions/${auction.id}`}>Просмотреть</Link>
@@ -180,10 +144,6 @@ export default function AdminDashboardPage() {
               <CardTitle>Управление лотами</CardTitle>
             </CardHeader>
             <CardContent>
-              {isProfilePending && <p className="text-red-500 text-sm mb-4">Ошибка при обновлении статуса лота.</p>}
-              {isProfilePending === false && (
-                <p className="text-green-500 text-sm mb-4">Статус лота успешно обновлен!</p>
-              )}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -195,17 +155,13 @@ export default function AdminDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {lots.map((lot) => (
+                  {lots?.map((lot) => (
                     <TableRow key={lot.id}>
                       <TableCell className="font-medium">{lot.name}</TableCell>
-                      <TableCell>{lot.auction_id}</TableCell> {/* Display auction ID for now */}
+                      <TableCell>{lot.auction_id}</TableCell>
                       <TableCell>{lot.current_bid.toLocaleString("ru-RU")} ₽</TableCell>
                       <TableCell>
-                        <Switch
-                          checked={lot.is_featured}
-                          onCheckedChange={() => handleToggleFeatured(lot.id, lot.is_featured)}
-                          disabled={isProfilePending}
-                        />
+                        <LotFeaturedToggle lotId={lot.id} initialIsFeatured={lot.is_featured} />
                       </TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" className="mr-2 bg-transparent" asChild>
