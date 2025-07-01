@@ -3,9 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Link from "next/link"
-import { createClient } from "@/supabase/server" // Import server-side client
-import { getAllAuctions } from "@/lib/auction-data"
-import { LotFeaturedToggle } from "@/components/admin/lot-featured-toggle" // New client component
+import { createClient } from "@/supabase/server"
+import { getAllAuctions } from "@/lib/auction-data" // Import getAuctionHouses
+import { LotFeaturedToggle } from "@/components/admin/lot-featured-toggle"
+import { ApproveAuctionHouseButton } from "@/components/admin/approve-auction-house-button" // New client component
 
 export default async function AdminDashboardPage() {
   const supabase = createClient()
@@ -18,6 +19,12 @@ export default async function AdminDashboardPage() {
 
   const { data: lots, error: lotsError } = await supabase.from("lots").select("*")
   if (lotsError) console.error("Error fetching lots:", lotsError)
+
+  // Fetch all auction houses, including pending ones for admin view
+  const { data: allAuctionHouses, error: ahError } = await supabase.from("auction_houses").select("*")
+  if (ahError) console.error("Error fetching all auction houses:", ahError)
+
+  const pendingAuctionHouses = allAuctionHouses?.filter((ah) => ah.status === "pending") || []
 
   const activeAuctionsCount = auctions.filter((a) => a.status === "active").length
   const pendingLotsCount = lots.filter(
@@ -59,10 +66,13 @@ export default async function AdminDashboardPage() {
       </div>
 
       <Tabs defaultValue="users" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
+          {" "}
+          {/* Increased grid-cols */}
           <TabsTrigger value="users">Пользователи</TabsTrigger>
           <TabsTrigger value="auctions">Аукционы</TabsTrigger>
           <TabsTrigger value="lots">Управление лотами</TabsTrigger>
+          <TabsTrigger value="ah-applications">Заявки АД</TabsTrigger> {/* New Tab */}
         </TabsList>
         <TabsContent value="users">
           <Card>
@@ -175,6 +185,43 @@ export default async function AdminDashboardPage() {
                   ))}
                 </TableBody>
               </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="ah-applications">
+          <Card>
+            <CardHeader>
+              <CardTitle>Заявки Аукционных Домов</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {pendingAuctionHouses.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Название</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Телефон</TableHead>
+                      <TableHead>Адрес</TableHead>
+                      <TableHead className="text-right">Действия</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {pendingAuctionHouses.map((ah) => (
+                      <TableRow key={ah.id}>
+                        <TableCell className="font-medium">{ah.name}</TableCell>
+                        <TableCell>{ah.contact_email}</TableCell>
+                        <TableCell>{ah.phone || "N/A"}</TableCell>
+                        <TableCell>{ah.address || "N/A"}</TableCell>
+                        <TableCell className="text-right">
+                          <ApproveAuctionHouseButton auctionHouseId={ah.id} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-muted-foreground text-center">Нет новых заявок на регистрацию аукционных домов.</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

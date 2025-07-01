@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import type React from "react"
 
 import { useState, useEffect, useActionState } from "react"
@@ -12,7 +14,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Trash2, Loader2, Save } from "lucide-react" // Import Loader2 and Save for spinner
 import { upsertAuction, upsertLot, updateLotStatus, deleteLot } from "@/app/actions/auction-house-management"
 import { uploadImage } from "@/app/actions/image-upload"
-import { fetchAuctionByIdForClient, fetchLotsByAuctionIdForClient } from "@/app/actions/data-fetching"
+import {
+  fetchAuctionByIdForClient,
+  fetchLotsByAuctionIdForClient,
+  fetchAuctionHouseByIdForClient,
+} from "@/app/actions/data-fetching"
 import { createClient } from "@/supabase/client"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -23,6 +29,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
   const [auction, setAuction] = useState<any>(null)
   const [lots, setLots] = useState<any[]>([])
   const [auctionHouseId, setAuctionHouseId] = useState<string | null>(null)
+  const [auctionHouseStatus, setAuctionHouseStatus] = useState<string | null>(null) // New state for AH status
   const [loading, setLoading] = useState(true)
   const [auctionImageFile, setAuctionImageFile] = useState<File | null>(null)
   const [auctionImageUrl, setAuctionImageUrl] = useState<string | null>(null)
@@ -67,6 +74,10 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
 
       if (profile && profile.role === "auction_house" && profile.auction_house_id && !profileError) {
         setAuctionHouseId(profile.auction_house_id)
+        const ah = await fetchAuctionHouseByIdForClient(profile.auction_house_id)
+        if (ah) {
+          setAuctionHouseStatus(ah.status)
+        }
 
         const fetchedAuction = await fetchAuctionByIdForClient(auctionId)
         if (fetchedAuction && fetchedAuction.auction_house_id === profile.auction_house_id) {
@@ -166,7 +177,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       // If it's a new lot not yet saved to DB, just remove from state
       setLots(lots.filter((_, i) => i !== index))
     } else if (auction?.status !== "draft") {
-      alert("Невозможно удалить лот, так как аукцион уже опубликован.")
+      alert("Невозможно удалить лот, так как аукцион уже опубликован. Вы можете только снять его с продажи.")
     }
   }
 
@@ -175,6 +186,11 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
 
     if (!auctionHouseId || !auction) {
       alert("Ошибка: Не удалось определить аукционный дом или аукцион.")
+      return
+    }
+
+    if (auctionHouseStatus !== "approved") {
+      alert("Ваш аккаунт аукционного дома еще не одобрен администратором. Вы не можете редактировать аукционы.")
       return
     }
 
@@ -258,6 +274,25 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
   if (!auction) {
     return (
       <div className="container py-8 text-center">Аукцион не найден или у вас нет прав для его редактирования.</div>
+    )
+  }
+
+  if (auctionHouseStatus !== "approved") {
+    return (
+      <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8 text-center">
+        <h1 className="text-4xl font-bold mb-4">Доступ ограничен</h1>
+        <p className="text-lg text-muted-foreground mb-8">
+          Ваш аккаунт аукционного дома еще не одобрен администратором. Вы не можете редактировать аукционы до одобрения.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Пожалуйста, ожидайте одобрения. Вы получите уведомление по электронной почте.
+        </p>
+        <Link href="/dashboard/auction-house" passHref>
+          <Button className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90">
+            Вернуться в панель управления
+          </Button>
+        </Link>
+      </div>
     )
   }
 

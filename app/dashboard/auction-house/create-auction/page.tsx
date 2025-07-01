@@ -1,5 +1,7 @@
 "use client"
 
+import Link from "next/link"
+
 import type React from "react"
 
 import { useState, useEffect, useActionState } from "react"
@@ -16,10 +18,12 @@ import { createClient } from "@/supabase/client"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
+import { fetchAuctionHouseByIdForClient } from "@/app/actions/data-fetching" // Import to check AH status
 
 export default function CreateAuctionPage() {
   const [lots, setLots] = useState<any[]>([])
   const [auctionHouseId, setAuctionHouseId] = useState<string | null>(null)
+  const [auctionHouseStatus, setAuctionHouseStatus] = useState<string | null>(null) // New state for AH status
   const [loading, setLoading] = useState(true)
   const [auctionImageFile, setAuctionImageFile] = useState<File | null>(null)
   const [auctionImageUrl, setAuctionImageUrl] = useState<string | null>(null)
@@ -42,7 +46,7 @@ export default function CreateAuctionPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    const fetchAuctionHouseId = async () => {
+    const fetchAuctionHouseData = async () => {
       setLoading(true)
       const {
         data: { user },
@@ -58,6 +62,10 @@ export default function CreateAuctionPage() {
 
         if (profile && profile.role === "auction_house" && profile.auction_house_id && !profileError) {
           setAuctionHouseId(profile.auction_house_id)
+          const ah = await fetchAuctionHouseByIdForClient(profile.auction_house_id)
+          if (ah) {
+            setAuctionHouseStatus(ah.status)
+          }
         } else {
           console.error("User is not an auction house or profile not found.")
           router.push("/dashboard/auction-house")
@@ -68,7 +76,7 @@ export default function CreateAuctionPage() {
       }
       setLoading(false)
     }
-    fetchAuctionHouseId()
+    fetchAuctionHouseData()
   }, [supabase, router])
 
   // Effect to handle lot save success/error feedback
@@ -133,11 +141,16 @@ export default function CreateAuctionPage() {
     setLots(lots.filter((_, i) => i !== index))
   }
 
-  const handleAuctionSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault() // Prevent default form submission
 
     if (!auctionHouseId) {
       alert("Ошибка: Не удалось определить аукционный дом.")
+      return
+    }
+
+    if (auctionHouseStatus !== "approved") {
+      alert("Ваш аккаунт аукционного дома еще не одобрен администратором. Вы не можете создавать аукционы.")
       return
     }
 
@@ -219,7 +232,7 @@ export default function CreateAuctionPage() {
     }
     // For new auction creation, auctionId is not yet available when lots are added to state.
     // This `handleLotSave` is primarily for *editing* lots after auction is created.
-    // For initial creation, lots are saved in `handleSubmit`.
+    // For initial creation, lots are saved in the main `handleSubmit`.
     // This function might be less relevant for `create-auction` page unless we allow saving individual lots before auction creation.
     // For now, I'll assume this is for a future "save individual lot" feature or for `edit-auction` page.
     // For `create-auction`, the lots are saved in the main `handleSubmit`.
@@ -249,6 +262,26 @@ export default function CreateAuctionPage() {
     return <div className="container py-8 text-center">Загрузка формы...</div>
   }
 
+  if (auctionHouseStatus !== "approved") {
+    return (
+      <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8 text-center">
+        <h1 className="text-4xl font-bold mb-4">Доступ ограничен</h1>
+        <p className="text-lg text-muted-foreground mb-8">
+          Ваш аккаунт аукционного дома еще не одобрен администратором. Вы не можете создавать новые аукционы до
+          одобрения.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          Пожалуйста, ожидайте одобрения. Вы получите уведомление по электронной почте.
+        </p>
+        <Link href="/dashboard/auction-house" passHref>
+          <Button className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90">
+            Вернуться в панель управления
+          </Button>
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-64px)]">
       <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8 flex-1 flex flex-col md:flex-row gap-8">
@@ -258,7 +291,7 @@ export default function CreateAuctionPage() {
             <CardTitle>Информация об аукционе</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleAuctionSubmit}>
+            <form onSubmit={handleSubmit}>
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
                   <Label htmlFor="title">Название аукциона</Label>

@@ -1,8 +1,14 @@
 import { createClient } from "@/supabase/server"
 
-export async function getAuctionHouses() {
+export async function getAuctionHouses(includePending = false) {
   const supabase = createClient()
-  const { data, error } = await supabase.from("auction_houses").select("*")
+  let query = supabase.from("auction_houses").select("*")
+
+  if (!includePending) {
+    query = query.eq("status", "approved") // Only fetch approved auction houses by default
+  }
+
+  const { data, error } = await query
   if (error) {
     console.error("Error fetching auction houses:", error)
     return []

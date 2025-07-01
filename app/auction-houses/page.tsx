@@ -4,6 +4,7 @@ import Image from "next/image"
 import { getAuctionHouses } from "@/lib/auction-data" // Import new data functions
 
 export default async function AuctionHousesPage() {
+  // Fetch only approved auction houses by default
   const auctionHouses = await getAuctionHouses()
 
   return (
@@ -19,17 +20,17 @@ export default async function AuctionHousesPage() {
                   <Image
                     src={house.logo_url || "/placeholder.svg"}
                     alt={`${house.name} Logo`}
-                    width={150} // Increased size
-                    height={150} // Increased size
-                    className="rounded-md object-cover border border-muted mb-4"
+                    width={200} // Increased width
+                    height={120} // Adjusted height for wider aspect
+                    className="rounded-md object-contain border border-muted mb-4" // Use object-contain for logos
                   />
                   <CardTitle className="text-xl font-semibold text-foreground text-center">{house.name}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 pt-0 text-center flex-grow flex flex-col justify-between">
+                  {/* Display address or city instead of full description */}
                   <CardDescription className="text-sm text-muted-foreground mb-4">
-                    {house.description || "Описание отсутствует."}
+                    {house.address || house.city || "Адрес не указан."}
                   </CardDescription>
-                  {/* Button removed, entire card is now clickable */}
                 </CardContent>
               </Card>
             </Link>

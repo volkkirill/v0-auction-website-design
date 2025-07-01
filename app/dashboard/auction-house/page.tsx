@@ -1,5 +1,7 @@
 "use client"
 
+import { CardDescription } from "@/components/ui/card"
+
 import { useState, useEffect, useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,11 +12,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/supabase/client"
 import { updateAuctionHouseProfile, updateLotStatus, deleteLot } from "@/app/actions/auction-house-management"
-import {
-  fetchAuctionHouseByIdForClient,
-  fetchAllAuctionsForClient,
-  fetchLotsByAuctionIdForClient,
-} from "@/app/actions/data-fetching"
+import { fetchAuctionHouseByIdForClient, fetchAllAuctionsForClient } from "@/app/actions/data-fetching"
 import { Edit } from "lucide-react" // Import icons
 
 export default function AuctionHouseDashboardPage() {
@@ -63,17 +61,6 @@ export default function AuctionHouseDashboardPage() {
           setUpcomingAuctions(ahAuctions.filter((a) => a.status === "upcoming" || a.status === "active"))
           setDraftAuctions(ahAuctions.filter((a) => a.status === "draft")) // Filter draft auctions
           setCompletedAuctions(ahAuctions.filter((a) => a.status === "closed"))
-
-          // Fetch lots for all auctions (including drafts) to manage them
-          const allLotsData: any[] = []
-          for (const auction of ahAuctions) {
-            const lots = await fetchLotsByAuctionIdForClient(auction.id, true) // Include removed lots for management
-            allLotsData.push(...lots)
-          }
-          // No specific "pending lots" tab, all lots are managed under "Управление лотами"
-          // For now, we'll just display all lots associated with the AH's auctions
-          // A more complex solution would involve a separate table for lot submissions
-          // For simplicity, we'll just show all lots here.
         }
       } else {
         console.error("User is not an auction house or profile not found:", profileError)
@@ -123,16 +110,30 @@ export default function AuctionHouseDashboardPage() {
     )
   }
 
-  // Calculate total auctions, lots sold, and revenue from fetched data
-  const totalAuctions = upcomingAuctions.length + completedAuctions.length + draftAuctions.length
-  const totalLotsSold = completedAuctions.reduce((sum, auction) => sum + (auction.lotsSold || 0), 0) // Assuming lotsSold is a property on completed auctions
-  const totalRevenue = completedAuctions.reduce((sum, auction) => sum + (auction.revenue || 0), 0) // Assuming revenue is a property on completed auctions
+  // Check if the auction house is approved
+  if (auctionHouseProfile.status === "pending") {
+    return (
+      <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8 text-center">
+        <h1 className="text-4xl font-bold mb-4">Ваша заявка на рассмотрении</h1>
+        <p className="text-lg text-muted-foreground mb-8">
+          Ваш аккаунт аукционного дома ожидает одобрения администратором. Как только он будет одобрен, вы получите
+          полный доступ к панели управления.
+        </p>
+        <p className="text-sm text-muted-foreground">Обычно это занимает до 24 часов. Спасибо за ваше терпение!</p>
+        <Link href="/" passHref>
+          <Button className="mt-8 bg-primary text-primary-foreground hover:bg-primary/90">Вернуться на главную</Button>
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
       <h1 className="text-4xl font-bold mb-8 text-center">Панель управления аукционного дома</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+        {" "}
+        {/* Changed to 2 columns */}
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle>Информация об аукционном доме</CardTitle>
@@ -180,84 +181,66 @@ export default function AuctionHouseDashboardPage() {
             </form>
           </CardContent>
         </Card>
-
-        <Card className="md:col-span-2">
+        {/* Moved Upcoming/Active Auctions here */}
+        <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle>Статистика</CardTitle>
+            <CardTitle>Ваши предстоящие и активные аукционы</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-primary">{totalAuctions}</p>
-              <p className="text-muted-foreground">Всего аукционов</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-primary">{totalLotsSold}</p>
-              <p className="text-muted-foreground">Всего лотов продано</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-primary">{totalRevenue.toLocaleString("ru-RU")} ₽</p>
-              <p className="text-muted-foreground">Общий доход</p>
-            </div>
+          <CardContent>
+            {upcomingAuctions.length > 0 ? (
+              <div className="space-y-4">
+                {upcomingAuctions.map((auction) => (
+                  <div key={auction.id} className="flex items-center gap-4 border-b pb-4 last:border-b-0 last:pb-0">
+                    <Image
+                      src={auction.image_url || "/placeholder.svg"}
+                      alt={auction.title}
+                      width={80}
+                      height={80}
+                      className="rounded-md object-cover"
+                    />
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{auction.title}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Дата: {new Date(auction.start_time).toLocaleDateString()}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Статус: {auction.status === "active" ? "Активный" : "Предстоящий"}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/auctions/${auction.id}`}>Подробнее</Link>
+                      </Button>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link href={`/dashboard/auction-house/edit-auction/${auction.id}`}>
+                          <Edit className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-center">У вас нет предстоящих или активных аукционов.</p>
+            )}
+            <Link href="/dashboard/auction-house/create-auction" passHref>
+              <Button className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
+                Создать новый аукцион
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="upcoming-auctions" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="upcoming-auctions">Предстоящие/Активные</TabsTrigger>
+      <Tabs defaultValue="draft-auctions" className="w-full">
+        {" "}
+        {/* Default to drafts */}
+        <TabsList className="grid w-full grid-cols-2">
+          {" "}
+          {/* Only 2 tabs now */}
           <TabsTrigger value="draft-auctions">Черновики</TabsTrigger>
-          <TabsTrigger value="completed-auctions">Завершенные</TabsTrigger>
+          <TabsTrigger value="all-lots">Управление лотами</TabsTrigger> {/* New tab for all lots */}
         </TabsList>
-        <TabsContent value="upcoming-auctions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ваши предстоящие и активные аукционы</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {upcomingAuctions.length > 0 ? (
-                <div className="space-y-4">
-                  {upcomingAuctions.map((auction) => (
-                    <div key={auction.id} className="flex items-center gap-4 border-b pb-4 last:border-b-0 last:pb-0">
-                      <Image
-                        src={auction.image_url || "/placeholder.svg"}
-                        alt={auction.title}
-                        width={80}
-                        height={80}
-                        className="rounded-md object-cover"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{auction.title}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Дата: {new Date(auction.start_time).toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Статус: {auction.status === "active" ? "Активный" : "Предстоящий"}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/auctions/${auction.id}`}>Подробнее</Link>
-                        </Button>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link href={`/dashboard/auction-house/edit-auction/${auction.id}`}>
-                            <Edit className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-center">У вас нет предстоящих или активных аукционов.</p>
-              )}
-              <Link href="/dashboard/auction-house/create-auction" passHref>
-                <Button className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
-                  Создать новый аукцион
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </TabsContent>
         <TabsContent value="draft-auctions">
           <Card>
             <CardHeader>
@@ -303,47 +286,64 @@ export default function AuctionHouseDashboardPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="completed-auctions">
+        {/* Removed "Управление лотами" tab content here, it will be a separate tab */}
+        <TabsContent value="all-lots">
           <Card>
             <CardHeader>
-              <CardTitle>Ваши завершенные аукционы</CardTitle>
+              <CardTitle>Управление лотами (все аукционы)</CardTitle>
             </CardHeader>
             <CardContent>
-              {completedAuctions.length > 0 ? (
-                <div className="space-y-4">
-                  {completedAuctions.map((auction) => (
-                    <div key={auction.id} className="flex items-center gap-4 border-b pb-4 last:border-b-0 last:pb-0">
-                      <Image
-                        src={auction.image_url || "/placeholder.svg"}
-                        alt={auction.title}
-                        width={80}
-                        height={80}
-                        className="rounded-md object-cover"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{auction.title}</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Дата: {new Date(auction.start_time).toLocaleDateString()}
-                        </p>
-                        <p className="text-sm text-muted-foreground">Продано лотов: {auction.lotsSold || 0}</p>{" "}
-                        {/* Placeholder */}
-                        <p className="text-sm text-muted-foreground">
-                          Доход: {(auction.revenue || 0).toLocaleString("ru-RU")} ₽
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/auctions/${auction.id}`}>Просмотреть детали</Link>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-center">У вас нет завершенных аукционов.</p>
-              )}
+              {/* This section would list all lots from all auctions of this AH,
+                  allowing for status changes (active/removed) or other management.
+                  For now, it's a placeholder. You might want to fetch all lots here
+                  and display them in a table similar to the admin page. */}
+              <p className="text-muted-foreground text-center">
+                Здесь будет таблица для управления всеми лотами ваших аукционов.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Completed Auctions section moved outside of tabs */}
+      <h2 className="text-3xl font-bold mt-8 mb-6 text-center">Ваши завершенные аукционы</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {completedAuctions.length > 0 ? (
+          completedAuctions.map((auction) => (
+            <Card
+              key={auction.id}
+              className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300"
+            >
+              <CardHeader className="p-0">
+                <Image
+                  src={auction.image_url || "/placeholder.svg"}
+                  alt={auction.title}
+                  width={300}
+                  height={200}
+                  className="rounded-t-md object-cover w-full h-48"
+                />
+              </CardHeader>
+              <CardContent className="p-4 space-y-2">
+                <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
+                <CardDescription className="text-sm text-muted-foreground">
+                  Дата:{" "}
+                  <span className="font-bold text-primary">{new Date(auction.start_time).toLocaleDateString()}</span>
+                </CardDescription>
+                <p className="text-sm text-muted-foreground">Продано лотов: {auction.lotsSold || 0}</p>{" "}
+                {/* Placeholder */}
+                <p className="text-sm text-muted-foreground">
+                  Доход: {(auction.revenue || 0).toLocaleString("ru-RU")} ₽
+                </p>
+              </CardContent>
+              <Button variant="outline" size="sm" asChild className="w-full m-4 mt-0 bg-transparent">
+                <Link href={`/auctions/${auction.id}`}>Просмотреть детали</Link>
+              </Button>
+            </Card>
+          ))
+        ) : (
+          <p className="col-span-full text-center text-muted-foreground">У вас нет завершенных аукционов.</p>
+        )}
+      </div>
     </div>
   )
 }
