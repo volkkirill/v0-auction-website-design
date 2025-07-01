@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Hammer, Moon, Sun, Menu, Search, User } from "lucide-react" // Added User icon
+import { Hammer, Moon, Sun, Menu, Search, User } from "lucide-react"
 import { useTheme } from "next-themes"
 import { useState, useEffect, useActionState } from "react"
 import { Input } from "@/components/ui/input"
@@ -17,35 +17,63 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { signUp } from "@/app/auth/sign-up/action"
-import { signIn } from "@/app/auth/sign-in/action" // Import signIn action
-import { signOut } from "@/app/auth/sign-out/action" // Import signOut action
-import { createClient } from "@/supabase/client" // Import client-side Supabase client
-import type { User as SupabaseUser } from "@supabase/supabase-js" // Import User type
+import { signIn } from "@/app/auth/sign-in/action"
+import { signOut } from "@/app/auth/sign-out/action"
+import { createClient } from "@/supabase/client"
+import type { User as SupabaseUser } from "@supabase/supabase-js"
 
 export function Header() {
   const { theme, setTheme } = useTheme()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [registrationState, registrationAction, isRegistrationPending] = useActionState(signUp, { error: null })
-  const [loginState, loginAction, isLoginPending] = useActionState(signIn, { error: null }) // State for login
-  const [user, setUser] = useState<SupabaseUser | null>(null) // State to hold authenticated user
+  const [loginState, loginAction, isLoginPending] = useActionState(signIn, { error: null })
+  const [user, setUser] = useState<SupabaseUser | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null) // New state for user role
 
-  const supabase = createClient() // Initialize client-side Supabase client
+  const supabase = createClient()
 
   useEffect(() => {
-    const getUser = async () => {
+    const getUserAndRole = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser()
       setUser(user)
+
+      if (user) {
+        const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+        if (profile && !error) {
+          setUserRole(profile.role)
+        } else {
+          setUserRole("buyer") // Default to buyer if no role found
+        }
+      } else {
+        setUserRole(null)
+      }
     }
 
-    getUser()
+    getUserAndRole()
 
-    // Listen for auth state changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null)
+      if (session?.user) {
+        // Re-fetch role on auth state change
+        supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", session.user.id)
+          .single()
+          .then(({ data: profile, error }) => {
+            if (profile && !error) {
+              setUserRole(profile.role)
+            } else {
+              setUserRole("buyer")
+            }
+          })
+      } else {
+        setUserRole(null)
+      }
     })
 
     return () => {
@@ -59,6 +87,19 @@ export function Header() {
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark")
+  }
+
+  const getDashboardLink = () => {
+    if (!userRole) return "/"
+    switch (userRole) {
+      case "admin":
+        return "/admin"
+      case "auction_house":
+        return "/dashboard/auction-house"
+      case "buyer":
+      default:
+        return "/dashboard/buyer"
+    }
   }
 
   return (
@@ -112,10 +153,10 @@ export function Header() {
           {user ? (
             // User is logged in
             <>
-              <Link href="/dashboard/buyer" passHref>
+              <Link href={getDashboardLink()} passHref>
                 <Button variant="ghost" size="sm" className="hidden lg:inline-flex bg-transparent">
                   <User className="h-4 w-4 mr-2" />
-                  {user.email || "Мой аккаунт"}
+                  {userRole === "admin" ? "Админ-панель" : userRole === "auction_house" ? "Панель АД" : "Мой аккаунт"}
                 </Button>
               </Link>
               <form action={signOut}>
@@ -263,10 +304,14 @@ export function Header() {
                 {user ? (
                   // User is logged in (Mobile)
                   <>
-                    <Link href="/dashboard/buyer" passHref>
+                    <Link href={getDashboardLink()} passHref>
                       <Button variant="ghost" className="w-full justify-start mt-4">
                         <User className="h-4 w-4 mr-2" />
-                        {user.email || "Мой аккаунт"}
+                        {userRole === "admin"
+                          ? "Админ-панель"
+                          : userRole === "auction_house"
+                            ? "Панель АД"
+                            : "Мой аккаунт"}
                       </Button>
                     </Link>
                     <form action={signOut}>

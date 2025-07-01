@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useActionState } from "react"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -12,6 +12,7 @@ import {
   fetchAuctionByIdForClient,
   fetchAuctionHouseByIdForClient,
 } from "@/app/actions/data-fetching" // Import new Server Actions
+import { placeBid } from "@/app/actions/bidding" // Import the new bidding action
 
 // Helper function to determine bid increment based on current price
 const getBidIncrement = (currentPrice: number): number => {
@@ -33,25 +34,41 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
   const [auction, setAuction] = useState<any>(null)
   const [auctionHouse, setAuctionHouse] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [bidAmount, setBidAmount] = useState<number | string>("") // State for bid input
+  const [bidState, bidAction, isBidPending] = useActionState(placeBid, { error: null, success: false })
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-      const fetchedLot = await fetchLotByIdForClient(lotId) // Call Server Action
+      const fetchedLot = await fetchLotByIdForClient(lotId)
       setLot(fetchedLot)
 
       if (fetchedLot) {
-        const fetchedAuction = await fetchAuctionByIdForClient(fetchedLot.auction_id) // Call Server Action
+        const fetchedAuction = await fetchAuctionByIdForClient(fetchedLot.auction_id)
         setAuction(fetchedAuction)
         if (fetchedAuction) {
-          const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(fetchedAuction.auction_house_id) // Call Server Action
+          const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(fetchedAuction.auction_house_id)
           setAuctionHouse(fetchedAuctionHouse)
         }
+        // Set initial bid amount to current bid + min increment
+        setBidAmount(fetchedLot.current_bid + getBidIncrement(fetchedLot.current_bid))
       }
       setLoading(false)
     }
     fetchData()
   }, [lotId])
+
+  // Re-fetch lot data if a bid was successful
+  useEffect(() => {
+    if (bidState.success) {
+      const refetchLot = async () => {
+        const updatedLot = await fetchLotByIdForClient(lotId)
+        setLot(updatedLot)
+        setBidAmount(updatedLot.current_bid + getBidIncrement(updatedLot.current_bid)) // Update suggested bid
+      }
+      refetchLot()
+    }
+  }, [bidState.success, lotId])
 
   if (loading) {
     return <div className="container py-8 text-center">Загрузка лота...</div>
@@ -69,6 +86,14 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
     lot.current_bid + minBidIncrement * 2,
     lot.current_bid + minBidIncrement * 5,
   ].map((bid) => bid * (1 + lot.commission_rate)) // Calculate total price for suggested bids
+
+  const handleBidSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault() // Prevent default form submission
+    const formData = new FormData(event.currentTarget)
+    formData.append("lotId", lotId)
+    formData.append("bidAmount", String(bidAmount)) // Use the state value
+    await bidAction(formData)
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
@@ -128,14 +153,28 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
               <p className="text-sm text-muted-foreground">Количество ставок: {lot.bid_count}</p>
             </CardContent>
             <CardFooter className="flex flex-col gap-2">
-              <Input
-                type="number"
-                placeholder="Ваша ставка"
-                className="w-full"
-                onFocus={() => setShowBidIncrementHint(true)}
-                onBlur={() => setShowBidIncrementHint(false)}
-              />
-              <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">Сделать ставку</Button>
+              <form onSubmit={handleBidSubmit} className="w-full flex flex-col gap-2">
+                <Input
+                  type="number"
+                  placeholder="Ваша ставка"
+                  className="w-full"
+                  name="bidAmount" // Add name for FormData
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                  onFocus={() => setShowBidIncrementHint(true)}
+                  onBlur={() => setShowBidIncrementHint(false)}
+                  min={lot.current_bid + minBidIncrement} // Set min value for input
+                />
+                <Button
+                  type="submit"
+                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={isBidPending}
+                >
+                  {isBidPending ? "Делаем ставку..." : "Сделать ставку"}
+                </Button>
+                {bidState?.error && <p className="text-red-500 text-sm mt-2">{bidState.error}</p>}
+                {bidState?.success && <p className="text-green-500 text-sm mt-2">Ставка успешно сделана!</p>}
+              </form>
               {showBidIncrementHint && (
                 <div className="mt-4 bg-accent text-accent-foreground p-4 rounded-md shadow-md w-full">
                   <p className="text-sm font-semibold mb-2">Правила шага ставки:</p>
@@ -165,6 +204,7 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
                         variant="secondary"
                         size="sm"
                         className="bg-secondary text-secondary-foreground"
+                        onClick={() => setBidAmount(Math.round(bid / (1 + lot.commission_rate)))} // Set base bid amount
                       >
                         {bid.toLocaleString("ru-RU")} ₽
                       </Button>

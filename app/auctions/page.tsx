@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import Image from "next/image"
-import { fetchAllAuctionsForClient, fetchAuctionHousesForClient } from "@/app/actions/data-fetching" // Import new Server Actions
+import { fetchAllAuctionsForClient, fetchAuctionHousesForClient } from "@/app/actions/data-fetching"
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -48,8 +48,8 @@ export default function AuctionsPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-      const fetchedAuctions = await fetchAllAuctionsForClient() // Call Server Action
-      const fetchedAuctionHouses = await fetchAuctionHousesForClient() // Call Server Action
+      const fetchedAuctions = await fetchAllAuctionsForClient()
+      const fetchedAuctionHouses = await fetchAuctionHousesForClient()
       setAuctions(fetchedAuctions)
       setAuctionHouses(fetchedAuctionHouses)
       setLoading(false)
@@ -62,7 +62,10 @@ export default function AuctionsPage() {
       const matchesSearch = auction.title.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesCategory = categoryFilter === "all" || auction.category === categoryFilter
       // Only show 'closed' auctions on the auction house page, not here
-      const matchesStatus = statusFilter === "all" ? auction.status !== "closed" : auction.status === statusFilter
+      const matchesStatus =
+        statusFilter === "all"
+          ? auction.status !== "closed" && auction.status !== "draft"
+          : auction.status === statusFilter
       return matchesSearch && matchesCategory && matchesStatus
     })
     .sort((a, b) => {
@@ -169,9 +172,9 @@ export default function AuctionsPage() {
                         </div>
                       )}
                     </CardHeader>
-                    <CardContent className="p-4 space-y-2 flex-grow min-h-[120px]">
+                    <CardContent className="p-4 space-y-2 flex-grow">
                       {" "}
-                      {/* Added min-h for consistent card height */}
+                      {/* Added flex-grow for consistent card height */}
                       <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
                       <CardDescription className="text-sm text-muted-foreground">{auction.description}</CardDescription>
                       <p className="text-sm text-muted-foreground">

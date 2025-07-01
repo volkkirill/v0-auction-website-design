@@ -9,72 +9,107 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/supabase/client"
-import { updateAuctionHouseProfile } from "./action" // New action for AH profile update
+import { updateAuctionHouseProfile, updateLotStatus, deleteLot } from "@/app/actions/auction-house-management"
 import {
   fetchAuctionHouseByIdForClient,
   fetchAllAuctionsForClient,
   fetchLotsByAuctionIdForClient,
-} from "@/app/actions/data-fetching" // Import new Server Actions
+} from "@/app/actions/data-fetching"
+import { Edit } from "lucide-react" // Import icons
 
 export default function AuctionHouseDashboardPage() {
   const [auctionHouseProfile, setAuctionHouseProfile] = useState<any>(null)
   const [upcomingAuctions, setUpcomingAuctions] = useState<any[]>([])
+  const [draftAuctions, setDraftAuctions] = useState<any[]>([]) // New state for draft auctions
   const [completedAuctions, setCompletedAuctions] = useState<any[]>([])
-  const [pendingLots, setPendingLots] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [profileState, profileAction, isProfilePending] = useActionState(updateAuctionHouseProfile, {
+    error: null,
+    success: false,
+  })
+  const [lotStatusState, lotStatusAction, isLotStatusPending] = useActionState(updateLotStatus, {
+    error: null,
+    success: false,
+  })
+  const [deleteLotState, deleteLotAction, isDeleteLotPending] = useActionState(deleteLot, {
     error: null,
     success: false,
   })
 
   const supabase = createClient()
 
-  useEffect(() => {
-    const fetchAuctionHouseData = async () => {
-      setLoading(true)
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
+  const fetchData = async () => {
+    setLoading(true)
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser()
 
-      if (user && !userError) {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("auction_house_id, role")
-          .eq("id", user.id)
-          .single()
+    if (user && !userError) {
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("auction_house_id, role")
+        .eq("id", user.id)
+        .single()
 
-        if (profile && profile.role === "auction_house" && profile.auction_house_id && !profileError) {
-          const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(profile.auction_house_id) // Call Server Action
-          setAuctionHouseProfile(fetchedAuctionHouse)
+      if (profile && profile.role === "auction_house" && profile.auction_house_id && !profileError) {
+        const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(profile.auction_house_id)
+        setAuctionHouseProfile(fetchedAuctionHouse)
 
-          if (fetchedAuctionHouse) {
-            const allAuctions = await fetchAllAuctionsForClient() // Call Server Action
-            const ahAuctions = allAuctions.filter((a) => a.auction_house_id === fetchedAuctionHouse.id)
+        if (fetchedAuctionHouse) {
+          const allAuctions = await fetchAllAuctionsForClient()
+          const ahAuctions = allAuctions.filter((a) => a.auction_house_id === fetchedAuctionHouse.id)
 
-            setUpcomingAuctions(ahAuctions.filter((a) => a.status === "upcoming" || a.status === "active"))
-            setCompletedAuctions(ahAuctions.filter((a) => a.status === "closed"))
+          setUpcomingAuctions(ahAuctions.filter((a) => a.status === "upcoming" || a.status === "active"))
+          setDraftAuctions(ahAuctions.filter((a) => a.status === "draft")) // Filter draft auctions
+          setCompletedAuctions(ahAuctions.filter((a) => a.status === "closed"))
 
-            // Fetch pending lots for this auction house's auctions
-            const pendingLotsData: any[] = []
-            for (const auction of ahAuctions) {
-              const lots = await fetchLotsByAuctionIdForClient(auction.id) // Call Server Action
-              pendingLotsData.push(
-                ...lots.filter((lot) => lot.status === "На рассмотрении" || lot.status === "Ожидает утверждения"),
-              ) // Assuming a 'status' field on lots
-            }
-            setPendingLots(pendingLotsData)
+          // Fetch lots for all auctions (including drafts) to manage them
+          const allLotsData: any[] = []
+          for (const auction of ahAuctions) {
+            const lots = await fetchLotsByAuctionIdForClient(auction.id, true) // Include removed lots for management
+            allLotsData.push(...lots)
           }
-        } else {
-          console.error("User is not an auction house or profile not found:", profileError)
+          // No specific "pending lots" tab, all lots are managed under "Управление лотами"
+          // For now, we'll just display all lots associated with the AH's auctions
+          // A more complex solution would involve a separate table for lot submissions
+          // For simplicity, we'll just show all lots here.
         }
       } else {
-        console.error("Error fetching user:", userError)
+        console.error("User is not an auction house or profile not found:", profileError)
       }
-      setLoading(false)
+    } else {
+      console.error("Error fetching user:", userError)
     }
-    fetchAuctionHouseData()
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    fetchData()
   }, [supabase])
+
+  // Re-fetch data on successful lot status update or deletion
+  useEffect(() => {
+    if (lotStatusState.success || deleteLotState.success) {
+      fetchData()
+    }
+  }, [lotStatusState.success, deleteLotState.success])
+
+  const handleUpdateLotStatus = async (lotId: string, currentStatus: string) => {
+    const newStatus = currentStatus === "active" ? "removed" : "active" // Toggle between active and removed
+    const formData = new FormData()
+    formData.append("lotId", lotId)
+    formData.append("status", newStatus)
+    await lotStatusAction(formData)
+  }
+
+  const handleDeleteLot = async (lotId: string) => {
+    if (confirm("Вы уверены, что хотите удалить этот лот? Это действие необратимо.")) {
+      const formData = new FormData()
+      formData.append("lotId", lotId)
+      await deleteLotAction(formData)
+    }
+  }
 
   if (loading) {
     return <div className="container py-8 text-center">Загрузка данных аукционного дома...</div>
@@ -89,7 +124,7 @@ export default function AuctionHouseDashboardPage() {
   }
 
   // Calculate total auctions, lots sold, and revenue from fetched data
-  const totalAuctions = upcomingAuctions.length + completedAuctions.length
+  const totalAuctions = upcomingAuctions.length + completedAuctions.length + draftAuctions.length
   const totalLotsSold = completedAuctions.reduce((sum, auction) => sum + (auction.lotsSold || 0), 0) // Assuming lotsSold is a property on completed auctions
   const totalRevenue = completedAuctions.reduce((sum, auction) => sum + (auction.revenue || 0), 0) // Assuming revenue is a property on completed auctions
 
@@ -169,14 +204,14 @@ export default function AuctionHouseDashboardPage() {
 
       <Tabs defaultValue="upcoming-auctions" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="upcoming-auctions">Предстоящие аукционы</TabsTrigger>
-          <TabsTrigger value="completed-auctions">Завершенные аукционы</TabsTrigger>
-          <TabsTrigger value="pending-lots">Ожидающие лоты</TabsTrigger>
+          <TabsTrigger value="upcoming-auctions">Предстоящие/Активные</TabsTrigger>
+          <TabsTrigger value="draft-auctions">Черновики</TabsTrigger>
+          <TabsTrigger value="completed-auctions">Завершенные</TabsTrigger>
         </TabsList>
         <TabsContent value="upcoming-auctions">
           <Card>
             <CardHeader>
-              <CardTitle>Ваши предстоящие аукционы</CardTitle>
+              <CardTitle>Ваши предстоящие и активные аукционы</CardTitle>
             </CardHeader>
             <CardContent>
               {upcomingAuctions.length > 0 ? (
@@ -195,21 +230,74 @@ export default function AuctionHouseDashboardPage() {
                         <p className="text-sm text-muted-foreground">
                           Дата: {new Date(auction.start_time).toLocaleDateString()}
                         </p>
-                        <p className="text-sm text-muted-foreground">Количество лотов: {auction.lotsCount || 0}</p>{" "}
-                        {/* Placeholder */}
+                        <p className="text-sm text-muted-foreground">
+                          Статус: {auction.status === "active" ? "Активный" : "Предстоящий"}
+                        </p>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/auctions/${auction.id}`}>Подробнее</Link>
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/auctions/${auction.id}`}>Подробнее</Link>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/dashboard/auction-house/edit-auction/${auction.id}`}>
+                            <Edit className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center">У вас нет предстоящих аукционов.</p>
+                <p className="text-muted-foreground text-center">У вас нет предстоящих или активных аукционов.</p>
               )}
               <Link href="/dashboard/auction-house/create-auction" passHref>
                 <Button className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
                   Создать новый аукцион
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="draft-auctions">
+          <Card>
+            <CardHeader>
+              <CardTitle>Ваши черновики аукционов</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {draftAuctions.length > 0 ? (
+                <div className="space-y-4">
+                  {draftAuctions.map((auction) => (
+                    <div key={auction.id} className="flex items-center gap-4 border-b pb-4 last:border-b-0 last:pb-0">
+                      <Image
+                        src={auction.image_url || "/placeholder.svg"}
+                        alt={auction.title}
+                        width={80}
+                        height={80}
+                        className="rounded-md object-cover"
+                      />
+                      <div className="flex-1">
+                        <h3 className="font-semibold">{auction.title}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          Дата: {new Date(auction.start_time).toLocaleDateString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">Статус: Черновик</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/dashboard/auction-house/edit-auction/${auction.id}`}>
+                            <Edit className="h-4 w-4" /> Редактировать
+                          </Link>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center">У вас нет черновиков аукционов.</p>
+              )}
+              <Link href="/dashboard/auction-house/create-auction" passHref>
+                <Button className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
+                  Создать новый черновик
                 </Button>
               </Link>
             </CardContent>
@@ -252,47 +340,6 @@ export default function AuctionHouseDashboardPage() {
               ) : (
                 <p className="text-muted-foreground text-center">У вас нет завершенных аукционов.</p>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="pending-lots">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ожидающие лоты</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {pendingLots.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingLots.map((lot) => (
-                    <div key={lot.id} className="flex items-center gap-4 border-b pb-4 last:border-b-0 last:pb-0">
-                      <Image
-                        src={lot.image_urls?.[0] || "/placeholder.svg"}
-                        alt={lot.name}
-                        width={80}
-                        height={80}
-                        className="rounded-md object-cover"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{lot.name}</h3>
-                        <p className="text-sm text-muted-foreground">Статус: {lot.status}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Дата подачи: {new Date(lot.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/lots/${lot.id}`}>Просмотреть</Link>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-center">У вас нет ожидающих лотов.</p>
-              )}
-              <Link href="/dashboard/auction-house/create-auction" passHref>
-                <Button className="w-full mt-4 bg-primary text-primary-foreground hover:bg-primary/90">
-                  Подать новый лот
-                </Button>
-              </Link>
             </CardContent>
           </Card>
         </TabsContent>

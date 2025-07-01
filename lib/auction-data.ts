@@ -40,13 +40,15 @@ export async function getAuctionById(id: string) {
   return data
 }
 
-export async function getLotsByAuctionId(auctionId: string) {
+export async function getLotsByAuctionId(auctionId: string, includeRemoved = false) {
   const supabase = createClient()
-  const { data, error } = await supabase
-    .from("lots")
-    .select("*")
-    .eq("auction_id", auctionId)
-    .order("created_at", { ascending: true })
+  let query = supabase.from("lots").select("*").eq("auction_id", auctionId)
+
+  if (!includeRemoved) {
+    query = query.neq("status", "removed") // Filter out removed lots by default
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: true })
   if (error) {
     console.error(`Error fetching lots for auction ID ${auctionId}:`, error)
     return []
@@ -66,7 +68,12 @@ export async function getLotById(id: string) {
 
 export async function getFeaturedLots() {
   const supabase = createClient()
-  const { data, error } = await supabase.from("lots").select("*").eq("is_featured", true).limit(6)
+  const { data, error } = await supabase
+    .from("lots")
+    .select("*")
+    .eq("is_featured", true)
+    .eq("status", "active")
+    .limit(6) // Only active featured lots
   if (error) {
     console.error("Error fetching featured lots:", error)
     return []
@@ -93,7 +100,7 @@ export const images = {
   luxuryWatch:
     "https://images.unsplash.com/photo-1622434641406-a1581234509c?q=80&w=1964&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
   fineWine:
-    "https://images.unsplash.com/photo-1582139329536-e7261d679248?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+    "https://images.unsplash.com/photo-1582139329536-e7261d6d9248?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
   stampCollection:
     "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?q=80&w=1932&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
   landscapePainting:

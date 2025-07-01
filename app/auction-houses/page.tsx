@@ -1,5 +1,4 @@
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Image from "next/image"
 import { getAuctionHouses } from "@/lib/auction-data" // Import new data functions
@@ -14,29 +13,26 @@ export default async function AuctionHousesPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {auctionHouses.length > 0 ? (
           auctionHouses.map((house) => (
-            <Card
-              key={house.id}
-              className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300 flex flex-col"
-            >
-              <CardHeader className="flex flex-col items-center p-6 pb-4">
-                <Image
-                  src={house.logo_url || "/placeholder.svg"}
-                  alt={`${house.name} Logo`}
-                  width={100}
-                  height={100}
-                  className="rounded-md object-cover border border-muted mb-4"
-                />
-                <CardTitle className="text-xl font-semibold text-foreground text-center">{house.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="p-4 pt-0 text-center flex-grow flex flex-col justify-between">
-                <CardDescription className="text-sm text-muted-foreground mb-4">{house.description}</CardDescription>
-                <Link href={`/auction-houses/${house.id}`} passHref>
-                  <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                    Посмотреть страницу дома
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
+            <Link href={`/auction-houses/${house.id}`} key={house.id} passHref className="block">
+              <Card className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300 flex flex-col h-full cursor-pointer">
+                <CardHeader className="flex flex-col items-center p-6 pb-4">
+                  <Image
+                    src={house.logo_url || "/placeholder.svg"}
+                    alt={`${house.name} Logo`}
+                    width={150} // Increased size
+                    height={150} // Increased size
+                    className="rounded-md object-cover border border-muted mb-4"
+                  />
+                  <CardTitle className="text-xl font-semibold text-foreground text-center">{house.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 text-center flex-grow flex flex-col justify-between">
+                  <CardDescription className="text-sm text-muted-foreground mb-4">
+                    {house.description || "Описание отсутствует."}
+                  </CardDescription>
+                  {/* Button removed, entire card is now clickable */}
+                </CardContent>
+              </Card>
+            </Link>
           ))
         ) : (
           <p className="col-span-full text-center text-muted-foreground">Нет зарегистрированных аукционных домов.</p>
