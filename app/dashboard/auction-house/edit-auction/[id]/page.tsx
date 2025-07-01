@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2, Loader2 } from "lucide-react" // Import Loader2 for spinner
+import { Plus, Trash2, Loader2, Save } from "lucide-react" // Import Loader2 and Save for spinner
 import { upsertAuction, upsertLot, updateLotStatus, deleteLot } from "@/app/actions/auction-house-management"
 import { uploadImage } from "@/app/actions/image-upload"
 import { fetchAuctionByIdForClient, fetchLotsByAuctionIdForClient } from "@/app/actions/data-fetching"
@@ -29,12 +29,16 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
   const [isDraft, setIsDraft] = useState(false)
 
   const [auctionState, auctionAction, isAuctionPending] = useActionState(upsertAuction, { error: null, success: false })
-  const [lotState, lotAction, isLotPending] = useActionState(upsertLot, { error: null, success: false })
+  const [lotState, lotAction, isLotPending] = useActionState(upsertLot, {
+    error: null,
+    success: false,
+    lotIndex: -1,
+  }) // Added lotIndex to track which lot is being saved
   const [uploadState, uploadAction, isUploadPending] = useActionState(uploadImage, {
     error: null,
     url: null,
     success: false,
-  }) // Added success to initial state
+  })
   const [lotStatusState, lotStatusAction, isLotStatusPending] = useActionState(updateLotStatus, {
     error: null,
     success: false,
@@ -71,7 +75,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
           setIsDraft(fetchedAuction.status === "draft")
 
           const fetchedLots = await fetchLotsByAuctionIdForClient(auctionId, true) // Include removed lots for editing
-          setLots(fetchedLots)
+          setLots(fetchedLots.map((lot: any) => ({ ...lot, is_saving: false }))) // Add is_saving state
         } else {
           console.error("Auction not found or not owned by this auction house.")
           router.push("/dashboard/auction-house")
@@ -112,9 +116,8 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       formData.append("file", file)
       formData.append("folder", "auction_images")
       const result = await uploadAction(formData)
-      console.log("Auction image upload result:", result) // NEW LOG
+      console.log("Auction image upload result:", result)
       if (result.success && result.url && result.url.length > 0) {
-        // Added result.url.length > 0
         setAuctionImageUrl(result.url)
       } else {
         alert(result.error || "Ошибка загрузки изображения аукциона: URL не получен или пуст.")
@@ -123,7 +126,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
   }
 
   const addLot = () => {
-    setLots([...lots, { name: "", description: "", initial_price: "", image_urls: [], is_new: true }]) // Mark as new
+    setLots([...lots, { name: "", description: "", initial_price: "", image_urls: [], is_new: true, is_saving: false }]) // Mark as new
   }
 
   const updateLotField = (index: number, field: string, value: any) => {
@@ -139,9 +142,8 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       formData.append("file", file)
       formData.append("folder", "lot_images")
       const result = await uploadAction(formData)
-      console.log("Lot image upload result:", result) // NEW LOG
+      console.log("Lot image upload result:", result)
       if (result.success && result.url && result.url.length > 0) {
-        // Added result.url.length > 0
         const newLots = [...lots]
         newLots[lotIndex].image_urls = [result.url]
         setLots(newLots)
@@ -152,13 +154,19 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
   }
 
   const removeLot = async (index: number, lotId: string | undefined) => {
-    if (lotId && confirm("Вы уверены, что хотите удалить этот лот из базы данных? Это действие необратимо.")) {
+    if (
+      lotId &&
+      auction?.status === "draft" &&
+      confirm("Вы уверены, что хотите удалить этот лот из базы данных? Это действие необратимо.")
+    ) {
       const formData = new FormData()
       formData.append("lotId", lotId)
       await deleteLotAction(formData)
     } else if (!lotId) {
       // If it's a new lot not yet saved to DB, just remove from state
       setLots(lots.filter((_, i) => i !== index))
+    } else if (auction?.status !== "draft") {
+      alert("Невозможно удалить лот, так как аукцион уже опубликован.")
     }
   }
 
@@ -190,11 +198,24 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     }
   }
 
-  const handleLotSubmit = async (lot: any, index: number) => {
+  const handleLotSave = async (lot: any, index: number) => {
     if (!auction || !auctionHouseId) {
       alert("Ошибка: Не удалось определить аукцион или аукционный дом.")
       return
     }
+    if (!lot.name || !lot.initial_price) {
+      alert("Пожалуйста, заполните название и начальную цену лота.")
+      return
+    }
+    if (lot.image_urls.length === 0) {
+      alert("Пожалуйста, загрузите изображение для лота.")
+      return
+    }
+
+    // Temporarily set saving state for this specific lot
+    const newLots = [...lots]
+    newLots[index].is_saving = true
+    setLots(newLots)
 
     const lotFormData = new FormData()
     if (lot.id) {
@@ -206,10 +227,15 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     lotFormData.append("initial_price", String(lot.initial_price))
     lotFormData.append("image_urls", JSON.stringify(lot.image_urls))
 
-    console.log(`edit-auction (Client): Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
-    console.log(`edit-auction (Client): Stringified image_urls:`, JSON.stringify(lot.image_urls)) // LOGGING
+    console.log(`edit-auction (Client): Submitting lot ${lot.name} with image_urls:`, lot.image_urls)
+    console.log(`edit-auction (Client): Stringified image_urls:`, JSON.stringify(lot.image_urls))
 
     const result = await lotAction(lotFormData)
+
+    // Reset saving state
+    newLots[index].is_saving = false
+    setLots(newLots)
+
     if (result.error) {
       alert(`Ошибка сохранения лота ${lot.name}: ${result.error}`)
     } else if (result.success) {
@@ -236,192 +262,185 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
-      <h1 className="text-4xl font-bold mb-8 text-center">Редактировать аукцион: {auction.title}</h1>
-
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Информация об аукционе</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAuctionSubmit}>
-            <div className="grid gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Название аукциона</Label>
-                <Input id="title" name="title" type="text" defaultValue={auction.title} required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Описание</Label>
-                <Textarea id="description" name="description" rows={3} defaultValue={auction.description} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="start_time">Дата и время начала</Label>
-                <Input
-                  id="start_time"
-                  name="start_time"
-                  type="datetime-local"
-                  defaultValue={auction.start_time.substring(0, 16)} // Format for datetime-local input
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="category">Категория</Label>
-                <Select name="category" defaultValue={auction.category} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите категорию" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Искусство">Искусство</SelectItem>
-                    <SelectItem value="Коллекционирование">Коллекционирование</SelectItem>
-                    <SelectItem value="Автомобили">Автомобили</SelectItem>
-                    <SelectItem value="Ювелирные изделия">Ювелирные изделия</SelectItem>
-                    <SelectItem value="Антиквариат">Антиквариат</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="auction-image">Изображение аукциона</Label>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="auction-image"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleAuctionImageUpload}
-                    disabled={isUploadPending}
-                    className="flex-grow"
-                  />
-                  {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+    <div className="flex flex-col min-h-[calc(100vh-64px)]">
+      <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8 flex-1 flex flex-col md:flex-row gap-8">
+        {/* Left Column: Auction Information */}
+        <Card className="md:w-1/2 lg:w-1/3 flex-shrink-0">
+          <CardHeader>
+            <CardTitle>Информация об аукционе</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAuctionSubmit}>
+              <div className="grid gap-4 py-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Название аукциона</Label>
+                  <Input id="title" name="title" type="text" defaultValue={auction.title} required />
                 </div>
-                {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
-                {auctionImageUrl && (
-                  <div className="mt-2 relative w-32 h-32">
-                    <Image
-                      src={auctionImageUrl || "/placeholder.svg"}
-                      alt="Auction Preview"
-                      layout="fill"
-                      objectFit="cover"
-                      className="rounded-md"
+                <div className="space-y-2">
+                  <Label htmlFor="description">Описание</Label>
+                  <Textarea id="description" name="description" rows={3} defaultValue={auction.description} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="start_time">Дата и время начала</Label>
+                  <Input
+                    id="start_time"
+                    name="start_time"
+                    type="datetime-local"
+                    defaultValue={auction.start_time.substring(0, 16)} // Format for datetime-local input
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">Категория</Label>
+                  <Select name="category" defaultValue={auction.category} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Выберите категорию" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Искусство">Искусство</SelectItem>
+                      <SelectItem value="Коллекционирование">Коллекционирование</SelectItem>
+                      <SelectItem value="Автомобили">Автомобили</SelectItem>
+                      <SelectItem value="Ювелирные изделия">Ювелирные изделия</SelectItem>
+                      <SelectItem value="Антиквариат">Антиквариат</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="auction-image">Изображение аукциона</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="auction-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAuctionImageUpload}
+                      disabled={isUploadPending}
+                      className="flex-grow"
                     />
+                    {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
                   </div>
-                )}
+                  {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
+                  {auctionImageUrl && (
+                    <div className="mt-2 relative w-32 h-32">
+                      <Image
+                        src={auctionImageUrl || "/placeholder.svg"}
+                        alt="Auction Preview"
+                        layout="fill"
+                        objectFit="cover"
+                        className="rounded-md"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center space-x-2 mt-4">
+                  <Checkbox
+                    id="is-draft"
+                    checked={isDraft}
+                    onCheckedChange={(checked: boolean) => setIsDraft(checked)}
+                  />
+                  <Label htmlFor="is-draft">Сохранить как черновик (не публиковать сразу)</Label>
+                </div>
               </div>
-              <div className="flex items-center space-x-2 mt-4">
-                <Checkbox id="is-draft" checked={isDraft} onCheckedChange={(checked: boolean) => setIsDraft(checked)} />
-                <Label htmlFor="is-draft">Сохранить как черновик (не публиковать сразу)</Label>
-              </div>
-            </div>
 
-            {auctionState?.error && <p className="text-red-500 text-sm mt-4">{auctionState.error}</p>}
-            {auctionState?.success && <p className="text-green-500 text-sm mt-4">Аукцион успешно обновлен!</p>}
+              {auctionState?.error && <p className="text-red-500 text-sm mt-4">{auctionState.error}</p>}
+              {auctionState?.success && <p className="text-green-500 text-sm mt-4">Аукцион успешно обновлен!</p>}
 
-            <Button
-              type="submit"
-              className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-8"
-              disabled={isAuctionPending || isUploadPending}
-            >
-              {isAuctionPending ? "Обновление аукциона..." : "Сохранить изменения аукциона"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button
+                type="submit"
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 mt-8"
+                disabled={isAuctionPending || isUploadPending}
+              >
+                {isAuctionPending ? "Обновление аукциона..." : "Сохранить изменения аукциона"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-      <h2 className="text-2xl font-bold mt-8 mb-4">Лоты аукциона</h2>
-      {lots.map((lot, index) => (
-        <Card key={lot.id || `new-${index}`} className="mb-4 p-4 border border-border">
-          <div className="flex justify-between items-center mb-4">
-            <CardTitle className="text-lg">
-              Лот #{index + 1}{" "}
-              {lot.status === "removed" && <span className="text-red-500 text-sm">(Снят с продажи)</span>}
-            </CardTitle>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleLotSubmit(lot, index)}
-                disabled={isLotPending || isUploadPending}
-              >
-                Сохранить лот
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleToggleLotStatus(lot.id, lot.status)}
-                disabled={isLotStatusPending}
-              >
-                {lot.status === "active" ? "Снять с продажи" : "Вернуть в продажу"}
-              </Button>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => removeLot(index, lot.id)}
-                disabled={isDeleteLotPending}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label htmlFor={`lot-name-${index}`}>Название лота</Label>
-              <Input
-                id={`lot-name-${index}`}
-                type="text"
-                value={lot.name}
-                onChange={(e) => updateLotField(index, "name", e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`lot-description-${index}`}>Описание лота</Label>
-              <Textarea
-                id={`lot-description-${index}`}
-                rows={2}
-                value={lot.description}
-                onChange={(e) => updateLotField(index, "description", e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`lot-initial-price-${index}`}>Начальная цена</Label>
-              <Input
-                id={`lot-initial-price-${index}`}
-                type="number"
-                value={lot.initial_price}
-                onChange={(e) => updateLotField(index, "initial_price", Number.parseFloat(e.target.value) || 0)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`lot-image-${index}`}>Изображение лота</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id={`lot-image-${index}`}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleLotImageUpload(index, e)}
-                  disabled={isUploadPending}
-                  className="flex-grow"
-                />
-                {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-              </div>
-              {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
-              {lot.image_urls?.[0] && (
-                <div className="mt-2 relative w-32 h-32">
+        {/* Right Column: Lots */}
+        <div className="md:flex-1 flex flex-col">
+          <h2 className="text-2xl font-bold mb-4">Лоты аукциона ({lots.length})</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto flex-1">
+            {lots.map((lot, index) => (
+              <Card key={lot.id || `new-${index}`} className="p-2 border border-border flex flex-col aspect-square">
+                <div className="relative w-full h-24 mb-2">
                   <Image
-                    src={lot.image_urls[0] || "/placeholder.svg"}
+                    src={lot.image_urls?.[0] || "/placeholder.svg"}
                     alt="Lot Preview"
                     layout="fill"
                     objectFit="cover"
                     className="rounded-md"
                   />
                 </div>
-              )}
-            </div>
+                <div className="flex-1 flex flex-col justify-between">
+                  <h3 className="font-semibold text-sm truncate">{lot.name || "Новый лот"}</h3>
+                  <p className="text-xs text-muted-foreground">Нач. цена: {lot.initial_price || 0} ₽</p>
+                  <div className="flex gap-1 mt-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => handleLotSave(lot, index)}
+                      disabled={isLotPending || isUploadPending || lot.is_saving}
+                      className="h-7 w-7"
+                      title="Сохранить лот"
+                    >
+                      {lot.is_saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    </Button>
+                    {auction?.status === "draft" && (
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => removeLot(index, lot.id)}
+                        disabled={isDeleteLotPending || lot.is_saving}
+                        className="h-7 w-7"
+                        title="Удалить лот"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {auction?.status !== "draft" && lot.status === "active" && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleToggleLotStatus(lot.id, lot.status)}
+                        disabled={isLotStatusPending || lot.is_saving}
+                        className="h-7 w-7"
+                        title="Снять с продажи"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {auction?.status !== "draft" && lot.status === "removed" && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleToggleLotStatus(lot.id, lot.status)}
+                        disabled={isLotStatusPending || lot.is_saving}
+                        className="h-7 w-7"
+                        title="Вернуть в продажу"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                {/* Hidden inputs for lot details (for full form submission if needed, though individual saves are preferred) */}
+                <Input type="hidden" name={`lots[${index}].name`} value={lot.name} />
+                <Input type="hidden" name={`lots[${index}].description`} value={lot.description} />
+                <Input type="hidden" name={`lots[${index}].initial_price`} value={lot.initial_price} />
+                <Input type="hidden" name={`lots[${index}].image_urls`} value={JSON.stringify(lot.image_urls)} />
+              </Card>
+            ))}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addLot}
+              className="flex flex-col items-center justify-center aspect-square p-2 border-2 border-dashed border-border text-muted-foreground hover:bg-muted/50 transition-colors bg-transparent"
+            >
+              <Plus className="h-8 w-8 mb-1" />
+              <span>Добавить лот</span>
+            </Button>
           </div>
-        </Card>
-      ))}
-      <Button type="button" variant="outline" onClick={addLot} className="w-full mt-4 bg-transparent">
-        <Plus className="mr-2 h-4 w-4" /> Добавить лот
-      </Button>
+        </div>
+      </div>
     </div>
   )
 }
