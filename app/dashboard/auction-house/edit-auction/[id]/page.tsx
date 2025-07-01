@@ -204,7 +204,8 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     lotFormData.append("initial_price", String(lot.initial_price))
     lotFormData.append("image_urls", JSON.stringify(lot.image_urls))
 
-    console.log(`edit-auction: Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
+    console.log(`edit-auction (Client): Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
+    console.log(`edit-auction (Client): Stringified image_urls:`, JSON.stringify(lot.image_urls)) // LOGGING
 
     const result = await lotAction(lotFormData)
     if (result.error) {

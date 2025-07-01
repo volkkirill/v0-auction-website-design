@@ -149,13 +149,14 @@ export default function CreateAuctionPage() {
     // For each lot, call upsertLot
     for (const lot of lots) {
       const lotFormData = new FormData()
-      lotFormData.append("auctionId", auctionResult.auctionId) // Use the actual auctionId returned
+      lotFormData.append("auctionId", auctionResult.auctionId || "DUMMY_AUCTION_ID") // Use the actual auctionId returned
       lotFormData.append("name", lot.name)
       lotFormData.append("description", lot.description)
       lotFormData.append("initial_price", String(lot.initial_price))
       lotFormData.append("image_urls", JSON.stringify(lot.image_urls)) // Pass as JSON string
 
-      console.log(`create-auction: Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
+      console.log(`create-auction (Client): Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
+      console.log(`create-auction (Client): Stringified image_urls:`, JSON.stringify(lot.image_urls)) // LOGGING
 
       const lotResult = await lotAction(lotFormData)
       if (lotResult.error) {

@@ -64,7 +64,10 @@ export async function updateAuctionHouseProfile(
 }
 
 // Action to create or update an auction
-export async function upsertAuction(prevState: { error: string | null; success: boolean }, formData: FormData) {
+export async function upsertAuction(
+  prevState: { error: string | null; success: boolean; auctionId?: string },
+  formData: FormData,
+) {
   const supabase = createClient()
   const {
     data: { user },
@@ -148,14 +151,14 @@ export async function upsertLot(prevState: { error: string | null; success: bool
   const initial_price = Number.parseFloat(formData.get("initial_price") as string)
   const image_urls_string = formData.get("image_urls") as string // This will be a JSON string of URLs
 
-  console.log("upsertLot: Received image_urls_string:", image_urls_string) // LOGGING
+  console.log("upsertLot (Server Action): Received image_urls_string:", image_urls_string) // LOGGING
 
   let image_urls: string[] = []
   try {
     image_urls = JSON.parse(image_urls_string)
-    console.log("upsertLot: Parsed image_urls:", image_urls) // LOGGING
+    console.log("upsertLot (Server Action): Parsed image_urls:", image_urls) // LOGGING
   } catch (e) {
-    console.error("upsertLot: Failed to parse image_urls:", e) // LOGGING
+    console.error("upsertLot (Server Action): Failed to parse image_urls:", e) // LOGGING
     return { error: "Неверный формат URL изображений.", success: false }
   }
 
@@ -174,6 +177,25 @@ export async function upsertLot(prevState: { error: string | null; success: bool
     return { error: "У вас нет прав для создания/редактирования лота для этого аукциона.", success: false }
   }
 
+  let currentIsFeatured = false // Default for new lots
+  let currentStatus = "active" // Default for new lots
+
+  if (lotId) {
+    // If updating an existing lot, fetch its current is_featured and status
+    const { data: existingLot, error: fetchLotError } = await supabase
+      .from("lots")
+      .select("is_featured, status")
+      .eq("id", lotId)
+      .single()
+
+    if (fetchLotError || !existingLot) {
+      console.error("upsertLot (Server Action): Error fetching existing lot for update:", fetchLotError) // LOGGING
+      return { error: "Не удалось получить существующий лот для обновления.", success: false }
+    }
+    currentIsFeatured = existingLot.is_featured
+    currentStatus = existingLot.status // Preserve existing status
+  }
+
   const lotData = {
     name,
     description,
@@ -181,11 +203,11 @@ export async function upsertLot(prevState: { error: string | null; success: bool
     image_urls, // This is the parsed array
     auction_id: auctionId,
     commission_rate: 0.05, // Default
-    is_featured: false, // Default
-    status: "active", // Default status for new/updated lots
+    is_featured: currentIsFeatured, // Preserve existing or default to false
+    status: currentStatus, // Preserve existing or default to active
   }
 
-  console.log("upsertLot: Data to be inserted/updated:", lotData) // LOGGING
+  console.log("upsertLot (Server Action): Data to be inserted/updated:", lotData) // LOGGING
 
   let error: any = null
   if (lotId) {
@@ -199,7 +221,7 @@ export async function upsertLot(prevState: { error: string | null; success: bool
   }
 
   if (error) {
-    console.error("upsertLot: Supabase operation error:", error) // LOGGING
+    console.error("upsertLot (Server Action): Supabase operation error:", error) // LOGGING
     return { error: error.message, success: false }
   }
 

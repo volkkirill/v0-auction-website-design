@@ -48,5 +48,6 @@ export async function uploadImage(
     return { error: "Не удалось получить публичный URL изображения.", url: null, success: false }
   }
 
+  // Only return success: true if a public URL was successfully obtained
   return { error: null, url: publicUrlData.publicUrl, success: true }
 }
