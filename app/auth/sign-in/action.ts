@@ -18,5 +18,34 @@ export async function signIn(prevState: { error: string | null }, formData: Form
     return { error: error.message }
   }
 
-  redirect("/") // Redirect to home page or dashboard after successful login
+  // Fetch user profile to determine role
+  const {
+    data: { user },
+    error: userFetchError,
+  } = await supabase.auth.getUser()
+
+  if (userFetchError || !user) {
+    return { error: "Не удалось получить данные пользователя после входа." }
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile) {
+    // If profile not found, create a default 'buyer' profile
+    await supabase.from("profiles").insert({ id: user.id, email: user.email, role: "buyer" })
+    redirect("/dashboard/buyer")
+  }
+
+  // Redirect based on role
+  if (profile.role === "admin") {
+    redirect("/admin")
+  } else if (profile.role === "auction_house") {
+    redirect("/dashboard/auction-house")
+  } else {
+    redirect("/dashboard/buyer") // Default for 'buyer' or other roles
+  }
 }

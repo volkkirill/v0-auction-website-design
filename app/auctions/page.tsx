@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import Image from "next/image"
-import { allAuctions, auctionHouses } from "@/lib/auction-data" // Import centralized data
+import { getAllAuctions, getAuctionHouses } from "@/lib/auction-data" // Import new data functions
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -41,8 +41,23 @@ export default function AuctionsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [auctions, setAuctions] = useState<any[]>([])
+  const [auctionHouses, setAuctionHouses] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const filteredAuctions = allAuctions
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      const fetchedAuctions = await getAllAuctions()
+      const fetchedAuctionHouses = await getAuctionHouses()
+      setAuctions(fetchedAuctions)
+      setAuctionHouses(fetchedAuctionHouses)
+      setLoading(false)
+    }
+    fetchData()
+  }, [])
+
+  const filteredAuctions = auctions
     .filter((auction) => {
       const matchesSearch = auction.title.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesCategory = categoryFilter === "all" || auction.category === categoryFilter
@@ -51,11 +66,15 @@ export default function AuctionsPage() {
       return matchesSearch && matchesCategory && matchesStatus
     })
     .sort((a, b) => {
-      // Default sort by date (startTime)
-      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+      // Default sort by date (start_time)
+      return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
     })
 
-  const categories = Array.from(new Set(allAuctions.map((auction) => auction.category)))
+  const categories = Array.from(new Set(auctions.map((auction) => auction.category)))
+
+  if (loading) {
+    return <div className="container py-8 text-center">Загрузка аукционов...</div>
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
@@ -129,7 +148,8 @@ export default function AuctionsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAuctions.length > 0 ? (
               filteredAuctions.map((auction) => {
-                const timeRemaining = formatTimeRemaining(auction.startTime) // Use startTime
+                const timeRemaining = formatTimeRemaining(auction.start_time) // Use start_time
+                const auctionHouse = auctionHouses.find((ah) => ah.id === auction.auction_house_id)
                 return (
                   <Card
                     key={auction.id}
@@ -137,7 +157,7 @@ export default function AuctionsPage() {
                   >
                     <CardHeader className="p-0">
                       <Image
-                        src={auction.image || "/placeholder.svg"}
+                        src={auction.image_url || "/placeholder.svg"}
                         alt={auction.title}
                         width={300}
                         height={200}
@@ -155,7 +175,7 @@ export default function AuctionsPage() {
                       <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
                       <CardDescription className="text-sm text-muted-foreground">{auction.description}</CardDescription>
                       <p className="text-sm text-muted-foreground">
-                        Дата: {new Date(auction.startTime).toLocaleString()}
+                        Дата: {new Date(auction.start_time).toLocaleString()}
                       </p>
                       <p className="text-sm text-muted-foreground">
                         Статус:{" "}
@@ -169,10 +189,10 @@ export default function AuctionsPage() {
                       <p className="text-sm text-muted-foreground">
                         Аукционный дом:{" "}
                         <Link
-                          href={`/auction-houses/${auction.auctionHouseId}`}
+                          href={`/auction-houses/${auction.auction_house_id}`}
                           className="font-bold text-primary hover:underline"
                         >
-                          {auctionHouses.find((ah) => ah.id === auction.auctionHouseId)?.name || "Неизвестно"}
+                          {auctionHouse?.name || "Неизвестно"}
                         </Link>
                       </p>
                     </CardContent>

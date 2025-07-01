@@ -1,15 +1,13 @@
 "use client"
 
-import React from "react"
-
-import { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import Image from "next/image"
-import { auctionHouses, images } from "@/lib/auction-data" // Import centralized data
+import { getLotById, getAuctionById, getAuctionHouseById } from "@/lib/auction-data" // Import new data functions
 
 // Helper function to determine bid increment based on current price
 const getBidIncrement = (currentPrice: number): number => {
@@ -27,42 +25,46 @@ const getBidIncrement = (currentPrice: number): number => {
 export default function LotDetailsPage({ params }: { params: { id: string } }) {
   const lotId = params.id
   const [showBidIncrementHint, setShowBidIncrementHint] = useState(false)
+  const [lot, setLot] = useState<any>(null)
+  const [auction, setAuction] = useState<any>(null)
+  const [auctionHouse, setAuctionHouse] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
 
-  // Dummy data for a single lot
-  const lot = {
-    id: lotId,
-    name: "Винтажные часы Rolex Daytona",
-    description:
-      "Редкая модель Rolex Daytona 6263 'Paul Newman' 1970 года выпуска. Часы находятся в отличном коллекционном состоянии, полностью оригинальны. Поставляются с оригинальной коробкой и документами.",
-    initialPrice: 1000000, // Начальная цена в рублях (число)
-    currentBid: 1500000, // Текущая ставка в рублях (число)
-    bidCount: 15,
-    startTime: "2025-07-20T10:00:00Z", // Дата начала торгов
-    commissionRate: 0.05, // Комиссия аукционного дома (5%)
-    category: "Ювелирные изделия",
-    images: [images.luxuryWatch, images.luxuryWatch, images.luxuryWatch], // Using centralized images
-    auction: {
-      id: "1",
-      title: "Аукцион №1: Коллекция редких часов",
-      auctionHouse: {
-        id: "ah1",
-        name: auctionHouses.find((ah) => ah.id === "ah1")?.name || "Неизвестно",
-      },
-    },
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      const fetchedLot = await getLotById(lotId)
+      setLot(fetchedLot)
+
+      if (fetchedLot) {
+        const fetchedAuction = await getAuctionById(fetchedLot.auction_id)
+        setAuction(fetchedAuction)
+        if (fetchedAuction) {
+          const fetchedAuctionHouse = await getAuctionHouseById(fetchedAuction.auction_house_id)
+          setAuctionHouse(fetchedAuctionHouse)
+        }
+      }
+      setLoading(false)
+    }
+    fetchData()
+  }, [lotId])
+
+  if (loading) {
+    return <div className="container py-8 text-center">Загрузка лота...</div>
   }
 
-  if (!lot) {
+  if (!lot || !auction || !auctionHouse) {
     return <div className="container py-8 text-center">Лот не найден.</div>
   }
 
-  const minBidIncrement = getBidIncrement(lot.currentBid)
-  const currentBidWithCommission = lot.currentBid * (1 + lot.commissionRate)
+  const minBidIncrement = getBidIncrement(lot.current_bid)
+  const currentBidWithCommission = lot.current_bid * (1 + lot.commission_rate)
 
   const suggestedBids = [
-    lot.currentBid + minBidIncrement,
-    lot.currentBid + minBidIncrement * 2,
-    lot.currentBid + minBidIncrement * 5,
-  ].map((bid) => bid * (1 + lot.commissionRate)) // Calculate total price for suggested bids
+    lot.current_bid + minBidIncrement,
+    lot.current_bid + minBidIncrement * 2,
+    lot.current_bid + minBidIncrement * 5,
+  ].map((bid) => bid * (1 + lot.commission_rate)) // Calculate total price for suggested bids
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
@@ -71,7 +73,7 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
         <div>
           <div className="relative w-full h-[400px] rounded-lg overflow-hidden mb-4">
             <Image
-              src={lot.images[0] || "/placeholder.svg"}
+              src={lot.image_urls?.[0] || "/placeholder.svg"}
               alt={lot.name}
               layout="fill"
               objectFit="cover"
@@ -79,7 +81,7 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
             />
           </div>
           <div className="grid grid-cols-4 gap-2">
-            {lot.images.map((img, index) => (
+            {lot.image_urls?.map((img: string, index: number) => (
               <div key={index} className="relative w-full h-24 rounded-md overflow-hidden cursor-pointer">
                 <Image
                   src={img || "/placeholder.svg"}
@@ -105,21 +107,21 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
             <CardContent className="space-y-2">
               <p className="text-lg">
                 Начальная цена:{" "}
-                <span className="font-bold text-primary">{lot.initialPrice.toLocaleString("ru-RU")} ₽</span>
+                <span className="font-bold text-primary">{lot.initial_price.toLocaleString("ru-RU")} ₽</span>
               </p>
               <p className="text-lg">
                 Текущая ставка:{" "}
-                <span className="font-bold text-primary">{lot.currentBid.toLocaleString("ru-RU")} ₽</span>
+                <span className="font-bold text-primary">{lot.current_bid.toLocaleString("ru-RU")} ₽</span>
               </p>
               <p className="text-lg">
                 Комиссия аукционного дома:{" "}
-                <span className="font-bold text-primary">{(lot.commissionRate * 100).toFixed(0)}%</span>
+                <span className="font-bold text-primary">{(lot.commission_rate * 100).toFixed(0)}%</span>
               </p>
               <p className="text-lg">
                 Итоговая цена с комиссией (при выигрыше):{" "}
                 <span className="font-bold text-primary">{currentBidWithCommission.toLocaleString("ru-RU")} ₽</span>
               </p>
-              <p className="text-sm text-muted-foreground">Количество ставок: {lot.bidCount}</p>
+              <p className="text-sm text-muted-foreground">Количество ставок: {lot.bid_count}</p>
             </CardContent>
             <CardFooter className="flex flex-col gap-2">
               <Input
@@ -150,7 +152,7 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
                     ))}
                   </div>
                   <p className="text-sm font-semibold mt-4 mb-2">
-                    Предлагаемые ставки (включая комиссию {lot.commissionRate * 100}%):
+                    Предлагаемые ставки (включая комиссию {lot.commission_rate * 100}%):
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {suggestedBids.map((bid, index) => (
@@ -178,21 +180,20 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
             <CardContent className="space-y-2">
               <p className="text-sm text-muted-foreground">
                 Аукцион:{" "}
-                <Link href={`/auctions/${lot.auction.id}`} className="font-bold text-primary hover:underline">
-                  {lot.auction.title}
+                <Link href={`/auctions/${auction.id}`} className="font-bold text-primary hover:underline">
+                  {auction.title}
                 </Link>
               </p>
               <p className="text-sm text-muted-foreground">
                 Аукционный дом:{" "}
-                <Link
-                  href={`/auction-houses/${lot.auction.auctionHouse.id}`}
-                  className="font-bold text-primary hover:underline"
-                >
-                  {lot.auction.auctionHouse.name}
+                <Link href={`/auction-houses/${auctionHouse.id}`} className="font-bold text-primary hover:underline">
+                  {auctionHouse.name}
                 </Link>
               </p>
               <p className="text-sm text-muted-foreground">Категория: {lot.category}</p>
-              <p className="text-sm text-muted-foreground">Начало торгов: {new Date(lot.startTime).toLocaleString()}</p>
+              <p className="text-sm text-muted-foreground">
+                Начало торгов: {new Date(auction.start_time).toLocaleString()}
+              </p>
             </CardContent>
           </Card>
         </div>

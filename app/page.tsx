@@ -2,7 +2,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Image from "next/image"
-import { allAuctions, auctionHouses, images } from "@/lib/auction-data" // Import centralized data
+import { getFeaturedLots, getAllAuctions, getAuctionHouses, images } from "@/lib/auction-data" // Import new data functions
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -31,20 +31,15 @@ const formatTimeRemaining = (startTime: string) => {
   return timeString.trim()
 }
 
-export default function HomePage() {
+export default async function HomePage() {
+  const featuredLots = await getFeaturedLots()
+  const allAuctions = await getAllAuctions()
+  const auctionHouses = await getAuctionHouses()
+
   // Use a subset of allAuctions for upcoming auctions on the homepage
   const upcomingAuctions = allAuctions
     .filter((auction) => auction.status === "upcoming" || auction.status === "active")
     .slice(0, 6) // Show first 6 upcoming/active auctions
-
-  const interestingLots = [
-    { id: "lot1", name: "Редкая марка 19 века", image: images.stampCollection },
-    { id: "lot2", name: "Винтажный Ролекс", image: images.luxuryWatch },
-    { id: "lot3", name: "Картина 'Закат'", image: images.artPainting },
-    { id: "lot4", name: "Золотая монета", image: images.rareCoin },
-    { id: "lot5", name: "Скульптура 'Мыслитель'", image: images.modernSculpture },
-    { id: "lot6", name: "Коллекционное вино", image: images.fineWine },
-  ]
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -73,11 +68,10 @@ export default function HomePage() {
               <Link href="/auctions" passHref>
                 <Button className="bg-primary text-primary-foreground hover:bg-primary/90">Посмотреть аукционы</Button>
               </Link>
-              <Link href="/register" passHref>
-                <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 bg-transparent">
-                  Зарегистрироваться
-                </Button>
-              </Link>
+              {/* Changed to open registration modal */}
+              <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 bg-transparent">
+                Зарегистрироваться
+              </Button>
             </div>
           </div>
 
@@ -87,23 +81,27 @@ export default function HomePage() {
               Анонсы интересных лотов
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-4 w-full">
-              {interestingLots.map((lot) => (
-                <Card
-                  key={lot.id}
-                  className="bg-card text-card-foreground border-border hover:shadow-lg transition-shadow duration-300 flex flex-col items-center p-3 text-center"
-                >
-                  <Link href={`/lots/${lot.id}`} passHref>
-                    <Image
-                      src={lot.image || "/placeholder.svg"}
-                      alt={lot.name}
-                      width={80}
-                      height={80}
-                      className="rounded-md object-cover border border-muted mb-2 cursor-pointer"
-                    />
-                  </Link>
-                  <CardTitle className="text-sm font-semibold text-foreground">{lot.name}</CardTitle>
-                </Card>
-              ))}
+              {featuredLots.length > 0 ? (
+                featuredLots.map((lot) => (
+                  <Card
+                    key={lot.id}
+                    className="bg-card text-card-foreground border-border hover:shadow-lg transition-shadow duration-300 flex flex-col items-center p-3 text-center"
+                  >
+                    <Link href={`/lots/${lot.id}`} passHref>
+                      <Image
+                        src={lot.image_urls?.[0] || "/placeholder.svg"}
+                        alt={lot.name}
+                        width={80}
+                        height={80}
+                        className="rounded-md object-cover border border-muted mb-2 cursor-pointer"
+                      />
+                    </Link>
+                    <CardTitle className="text-sm font-semibold text-foreground">{lot.name}</CardTitle>
+                  </Card>
+                ))
+              ) : (
+                <p className="text-muted-foreground col-span-full text-center text-sm">Нет интересных лотов.</p>
+              )}
             </div>
           </div>
         </div>
@@ -114,54 +112,59 @@ export default function HomePage() {
         <div className="container px-4 md:px-6">
           <h2 className="text-3xl font-bold text-center mb-8 text-foreground">Предстоящие аукционы</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {upcomingAuctions.map((auction) => {
-              const timeRemaining = formatTimeRemaining(auction.startTime) // Use startTime
-              return (
-                <Card
-                  key={auction.id}
-                  className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300 relative"
-                >
-                  <CardHeader className="p-0">
-                    <Image
-                      src={auction.image || "/placeholder.svg"}
-                      alt={auction.title}
-                      width={300}
-                      height={200}
-                      className="rounded-t-md object-cover w-full h-48"
-                    />
-                    {timeRemaining && (
-                      <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-md">
-                        Начнется через: {timeRemaining}
-                      </div>
-                    )}
-                  </CardHeader>
-                  <CardContent className="p-4 space-y-2">
-                    <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
-                    <CardDescription className="text-sm text-muted-foreground">
-                      Дата:{" "}
-                      <span className="font-bold text-primary">{new Date(auction.startTime).toLocaleString()}</span>
-                    </CardDescription>
-                    <p className="text-sm text-muted-foreground">{auction.description}</p>
-                    <p className="text-sm text-muted-foreground">
-                      Аукционный дом:{" "}
-                      <Link
-                        href={`/auction-houses/${auction.auctionHouseId}`}
-                        className="font-bold text-primary hover:underline"
-                      >
-                        {auctionHouses.find((ah) => ah.id === auction.auctionHouseId)?.name || "Неизвестно"}
+            {upcomingAuctions.length > 0 ? (
+              upcomingAuctions.map((auction) => {
+                const timeRemaining = formatTimeRemaining(auction.start_time) // Use start_time
+                const auctionHouse = auctionHouses.find((ah) => ah.id === auction.auction_house_id)
+                return (
+                  <Card
+                    key={auction.id}
+                    className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300 relative"
+                  >
+                    <CardHeader className="p-0">
+                      <Image
+                        src={auction.image_url || "/placeholder.svg"}
+                        alt={auction.title}
+                        width={300}
+                        height={200}
+                        className="rounded-t-md object-cover w-full h-48"
+                      />
+                      {timeRemaining && (
+                        <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-md">
+                          Начнется через: {timeRemaining}
+                        </div>
+                      )}
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-2">
+                      <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
+                      <CardDescription className="text-sm text-muted-foreground">
+                        Дата:{" "}
+                        <span className="font-bold text-primary">{new Date(auction.start_time).toLocaleString()}</span>
+                      </CardDescription>
+                      <p className="text-sm text-muted-foreground">{auction.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Аукционный дом:{" "}
+                        <Link
+                          href={`/auction-houses/${auction.auction_house_id}`}
+                          className="font-bold text-primary hover:underline"
+                        >
+                          {auctionHouse?.name || "Неизвестно"}
+                        </Link>
+                      </p>
+                    </CardContent>
+                    <div className="p-4 pt-0">
+                      <Link href={`/auctions/${auction.id}`} passHref>
+                        <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+                          Посмотреть аукцион
+                        </Button>
                       </Link>
-                    </p>
-                  </CardContent>
-                  <div className="p-4 pt-0">
-                    <Link href={`/auctions/${auction.id}`} passHref>
-                      <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
-                        Посмотреть аукцион
-                      </Button>
-                    </Link>
-                  </div>
-                </Card>
-              )
-            })}
+                    </div>
+                  </Card>
+                )
+              })
+            ) : (
+              <p className="text-muted-foreground col-span-full text-center">Нет предстоящих аукционов.</p>
+            )}
           </div>
         </div>
       </section>

@@ -54,10 +54,12 @@ export default function AboutPage() {
       <section className="text-center">
         <h2 className="text-3xl font-bold mb-6">Присоединяйтесь к нам!</h2>
         <p className="text-lg text-muted-foreground mb-8">
-          Если у вас есть вопросы или предложения, свяжитесь с нашей службой поддержки.
+          Если вы аукционный дом и хотите размещать свои аукционы на нашей платформе, зарегистрируйтесь.
         </p>
-        <Link href="/support" passHref>
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">Связаться с нами</Button>
+        <Link href="/auth/sign-up-auction-house" passHref>
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+            Регистрация аукционного дома
+          </Button>
         </Link>
       </section>
     </div>

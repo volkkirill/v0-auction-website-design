@@ -1,27 +1,64 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from "@/components/ui/switch" // Import Switch for toggling featured status
 import Link from "next/link"
+import { createClient } from "@/supabase/client"
+import { getAllAuctions } from "@/lib/auction-data" // Import data functions
+import { toggleLotFeaturedStatus } from "./action" // New action for toggling featured status
 
 export default function AdminDashboardPage() {
-  const users = [
-    { id: "u1", name: "Иван Петров", email: "ivan@example.com", role: "Покупатель", status: "Активен" },
-    { id: "u2", name: "Мария Сидорова", email: "maria@example.com", role: "Продавец", status: "Активен" },
-    { id: "u3", name: "ООО 'АртГалерея'", email: "art@example.com", role: "Аукционный дом", status: "Активен" },
-    { id: "u4", name: "Петр Иванов", email: "petr@example.com", role: "Покупатель", status: "Заблокирован" },
-  ]
+  const [users, setUsers] = useState<any[]>([])
+  const [auctions, setAuctions] = useState<any[]>([])
+  const [lots, setLots] = useState<any[]>([]) // All lots for admin to manage
+  const [loading, setLoading] = useState(true)
+  const [isProfilePending, setIsProfilePending] = useState(false) // Declare the variable
 
-  const auctions = [
-    { id: "a1", title: "Аукцион редких монет", status: "Активен", lots: 50, participants: 120 },
-    { id: "a2", title: "Современное искусство", status: "Предстоящий", lots: 30, participants: 0 },
-    { id: "a3", title: "Винтажные автомобили", status: "Завершен", lots: 10, participants: 80 },
-  ]
+  const supabase = createClient()
 
-  const pendingLots = [
-    { id: "l1", name: "Старинная ваза", seller: "Мария Сидорова", status: "На рассмотрении" },
-    { id: "l2", name: "Коллекция марок", seller: "Иван Петров", status: "Ожидает утверждения" },
-  ]
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true)
+      // Fetch users (simplified for now, ideally from profiles table with roles)
+      const { data: fetchedUsers, error: usersError } = await supabase.from("profiles").select("*")
+      if (!usersError) setUsers(fetchedUsers)
+      else console.error("Error fetching users:", usersError)
+
+      const fetchedAuctions = await getAllAuctions()
+      setAuctions(fetchedAuctions)
+
+      const { data: fetchedLots, error: lotsError } = await supabase.from("lots").select("*")
+      if (!lotsError) setLots(fetchedLots)
+      else console.error("Error fetching lots:", lotsError)
+
+      setLoading(false)
+    }
+    fetchData()
+  }, [supabase])
+
+  const handleToggleFeatured = async (lotId: string, currentStatus: boolean) => {
+    const { error, success } = await toggleLotFeaturedStatus({ lotId, isFeatured: !currentStatus })
+    setIsProfilePending(error !== null) // Update isProfilePending based on error
+    if (success) {
+      // Re-fetch lots to update the UI after toggle
+      const { data: updatedLots, error: lotsError } = await supabase.from("lots").select("*")
+      if (!lotsError) setLots(updatedLots)
+      else console.error("Error re-fetching lots:", lotsError)
+    }
+  }
+
+  const activeAuctionsCount = auctions.filter((a) => a.status === "active").length
+  const pendingLotsCount = lots.filter(
+    (l) => l.status === "На рассмотрении" || l.status === "Ожидает утверждения",
+  ).length
+
+  if (loading) {
+    return <div className="container py-8 text-center">Загрузка панели администратора...</div>
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
@@ -43,7 +80,7 @@ export default function AdminDashboardPage() {
             <CardDescription>Количество текущих аукционов</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold text-primary">{auctions.filter((a) => a.status === "Активен").length}</p>
+            <p className="text-5xl font-bold text-primary">{activeAuctionsCount}</p>
           </CardContent>
         </Card>
         <Card>
@@ -52,7 +89,7 @@ export default function AdminDashboardPage() {
             <CardDescription>Лоты, ожидающие модерации</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-5xl font-bold text-primary">{pendingLots.length}</p>
+            <p className="text-5xl font-bold text-primary">{pendingLotsCount}</p>
           </CardContent>
         </Card>
       </div>
@@ -61,7 +98,7 @@ export default function AdminDashboardPage() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="users">Пользователи</TabsTrigger>
           <TabsTrigger value="auctions">Аукционы</TabsTrigger>
-          <TabsTrigger value="pending-lots">Лоты на рассмотрении</TabsTrigger>
+          <TabsTrigger value="lots">Управление лотами</TabsTrigger> {/* New tab for lot management */}
         </TabsList>
         <TabsContent value="users">
           <Card>
@@ -72,20 +109,18 @@ export default function AdminDashboardPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Имя</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Роль</TableHead>
-                    <TableHead>Статус</TableHead>
+                    <TableHead>Телефон</TableHead>
                     <TableHead className="text-right">Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell>{user.email}</TableCell>
+                      <TableCell className="font-medium">{user.email}</TableCell>
                       <TableCell>{user.role}</TableCell>
-                      <TableCell>{user.status}</TableCell>
+                      <TableCell>{user.phone || "N/A"}</TableCell>
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" className="mr-2 bg-transparent">
                           Редактировать
@@ -112,8 +147,8 @@ export default function AdminDashboardPage() {
                   <TableRow>
                     <TableHead>Название</TableHead>
                     <TableHead>Статус</TableHead>
-                    <TableHead>Лотов</TableHead>
-                    <TableHead>Участников</TableHead>
+                    <TableHead>Категория</TableHead>
+                    <TableHead>Аукционный дом</TableHead>
                     <TableHead className="text-right">Действия</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -122,8 +157,8 @@ export default function AdminDashboardPage() {
                     <TableRow key={auction.id}>
                       <TableCell className="font-medium">{auction.title}</TableCell>
                       <TableCell>{auction.status}</TableCell>
-                      <TableCell>{auction.lots}</TableCell>
-                      <TableCell>{auction.participants}</TableCell>
+                      <TableCell>{auction.category}</TableCell>
+                      <TableCell>{auction.auction_house_id}</TableCell> {/* Display ID for now */}
                       <TableCell className="text-right">
                         <Button variant="outline" size="sm" className="mr-2 bg-transparent" asChild>
                           <Link href={`/auctions/${auction.id}`}>Просмотреть</Link>
@@ -139,33 +174,45 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         </TabsContent>
-        <TabsContent value="pending-lots">
+        <TabsContent value="lots">
           <Card>
             <CardHeader>
-              <CardTitle>Модерация лотов</CardTitle>
+              <CardTitle>Управление лотами</CardTitle>
             </CardHeader>
             <CardContent>
+              {isProfilePending && <p className="text-red-500 text-sm mb-4">Ошибка при обновлении статуса лота.</p>}
+              {isProfilePending === false && (
+                <p className="text-green-500 text-sm mb-4">Статус лота успешно обновлен!</p>
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Название лота</TableHead>
-                    <TableHead>Продавец</TableHead>
-                    <TableHead>Статус</TableHead>
+                    <TableHead>Аукцион</TableHead>
+                    <TableHead>Текущая ставка</TableHead>
+                    <TableHead>В анонсах</TableHead>
                     <TableHead className="text-right">Действия</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pendingLots.map((lot) => (
+                  {lots.map((lot) => (
                     <TableRow key={lot.id}>
                       <TableCell className="font-medium">{lot.name}</TableCell>
-                      <TableCell>{lot.seller}</TableCell>
-                      <TableCell>{lot.status}</TableCell>
+                      <TableCell>{lot.auction_id}</TableCell> {/* Display auction ID for now */}
+                      <TableCell>{lot.current_bid.toLocaleString("ru-RU")} ₽</TableCell>
+                      <TableCell>
+                        <Switch
+                          checked={lot.is_featured}
+                          onCheckedChange={() => handleToggleFeatured(lot.id, lot.is_featured)}
+                          disabled={isProfilePending}
+                        />
+                      </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" className="mr-2 bg-transparent">
-                          Одобрить
+                        <Button variant="outline" size="sm" className="mr-2 bg-transparent" asChild>
+                          <Link href={`/lots/${lot.id}`}>Просмотреть</Link>
                         </Button>
                         <Button variant="destructive" size="sm">
-                          Отклонить
+                          Удалить
                         </Button>
                       </TableCell>
                     </TableRow>

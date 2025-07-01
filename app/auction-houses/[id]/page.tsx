@@ -3,31 +3,32 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Image from "next/image"
-import { auctionHouses, allAuctions } from "@/lib/auction-data" // Import centralized data
+import { getAuctionHouseById, getAllAuctions } from "@/lib/auction-data" // Import new data functions
 
-export default function AuctionHouseDetailsPage({ params }: { params: { id: string } }) {
+export default async function AuctionHouseDetailsPage({ params }: { params: { id: string } }) {
   const auctionHouseId = params.id
 
   // Find the auction house from the centralized data
-  const auctionHouse = auctionHouses.find((ah) => ah.id === auctionHouseId)
+  const auctionHouse = await getAuctionHouseById(auctionHouseId)
 
   if (!auctionHouse) {
     return <div className="container py-8 text-center">Аукционный дом не найден.</div>
   }
 
   // Filter auctions belonging to this auction house
+  const allAuctions = await getAllAuctions()
   const upcomingAuctions = allAuctions.filter(
-    (auction) => auction.auctionHouseId === auctionHouse.id && auction.status === "upcoming",
+    (auction) => auction.auction_house_id === auctionHouse.id && auction.status === "upcoming",
   )
   const completedAuctions = allAuctions.filter(
-    (auction) => auction.auctionHouseId === auctionHouse.id && auction.status === "closed",
+    (auction) => auction.auction_house_id === auctionHouse.id && auction.status === "closed",
   )
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
       <div className="flex flex-col items-center text-center mb-8">
         <Image
-          src={auctionHouse.logo || "/placeholder.svg"}
+          src={auctionHouse.logo_url || "/placeholder.svg"}
           alt={`${auctionHouse.name} Logo`}
           width={150}
           height={150}
@@ -42,7 +43,7 @@ export default function AuctionHouseDetailsPage({ params }: { params: { id: stri
           <CardTitle>Контактная информация</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <p className="text-muted-foreground">Email: {auctionHouse.contactEmail}</p>
+          <p className="text-muted-foreground">Email: {auctionHouse.contact_email}</p>
           <p className="text-muted-foreground">Телефон: {auctionHouse.phone}</p>
           <p className="text-muted-foreground">Адрес: {auctionHouse.address}</p>
           {auctionHouse.website && (
@@ -71,7 +72,7 @@ export default function AuctionHouseDetailsPage({ params }: { params: { id: stri
             >
               <CardHeader className="p-0">
                 <Image
-                  src={auction.image || "/placeholder.svg"}
+                  src={auction.image_url || "/placeholder.svg"}
                   alt={auction.title}
                   width={300}
                   height={200}
@@ -82,7 +83,7 @@ export default function AuctionHouseDetailsPage({ params }: { params: { id: stri
                 <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
                 <CardDescription className="text-sm text-muted-foreground">
                   Дата:{" "}
-                  <span className="font-bold text-primary">{new Date(auction.startTime).toLocaleDateString()}</span>
+                  <span className="font-bold text-primary">{new Date(auction.start_time).toLocaleDateString()}</span>
                 </CardDescription>
                 <p className="text-sm text-muted-foreground">Категория: {auction.category}</p>
               </CardContent>
@@ -110,7 +111,7 @@ export default function AuctionHouseDetailsPage({ params }: { params: { id: stri
             >
               <CardHeader className="p-0">
                 <Image
-                  src={auction.image || "/placeholder.svg"}
+                  src={auction.image_url || "/placeholder.svg"}
                   alt={auction.title}
                   width={300}
                   height={200}
@@ -121,7 +122,7 @@ export default function AuctionHouseDetailsPage({ params }: { params: { id: stri
                 <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
                 <CardDescription className="text-sm text-muted-foreground">
                   Дата:{" "}
-                  <span className="font-bold text-primary">{new Date(auction.startTime).toLocaleDateString()}</span>
+                  <span className="font-bold text-primary">{new Date(auction.start_time).toLocaleDateString()}</span>
                 </CardDescription>
                 <p className="text-sm text-muted-foreground">Категория: {auction.category}</p>
                 {/* Dummy data for lotsSold and revenue for completed auctions */}
