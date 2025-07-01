@@ -10,7 +10,11 @@ import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/supabase/client"
 import { updateAuctionHouseProfile } from "./action" // New action for AH profile update
-import { getAuctionHouseById, getAllAuctions, getLotsByAuctionId } from "@/lib/auction-data"
+import {
+  fetchAuctionHouseByIdForClient,
+  fetchAllAuctionsForClient,
+  fetchLotsByAuctionIdForClient,
+} from "@/app/actions/data-fetching" // Import new Server Actions
 
 export default function AuctionHouseDashboardPage() {
   const [auctionHouseProfile, setAuctionHouseProfile] = useState<any>(null)
@@ -41,11 +45,11 @@ export default function AuctionHouseDashboardPage() {
           .single()
 
         if (profile && profile.role === "auction_house" && profile.auction_house_id && !profileError) {
-          const fetchedAuctionHouse = await getAuctionHouseById(profile.auction_house_id)
+          const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(profile.auction_house_id) // Call Server Action
           setAuctionHouseProfile(fetchedAuctionHouse)
 
           if (fetchedAuctionHouse) {
-            const allAuctions = await getAllAuctions()
+            const allAuctions = await fetchAllAuctionsForClient() // Call Server Action
             const ahAuctions = allAuctions.filter((a) => a.auction_house_id === fetchedAuctionHouse.id)
 
             setUpcomingAuctions(ahAuctions.filter((a) => a.status === "upcoming" || a.status === "active"))
@@ -54,7 +58,7 @@ export default function AuctionHouseDashboardPage() {
             // Fetch pending lots for this auction house's auctions
             const pendingLotsData: any[] = []
             for (const auction of ahAuctions) {
-              const lots = await getLotsByAuctionId(auction.id)
+              const lots = await fetchLotsByAuctionIdForClient(auction.id) // Call Server Action
               pendingLotsData.push(
                 ...lots.filter((lot) => lot.status === "На рассмотрении" || lot.status === "Ожидает утверждения"),
               ) // Assuming a 'status' field on lots

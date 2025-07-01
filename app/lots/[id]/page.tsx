@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import Image from "next/image"
-import { getLotById, getAuctionById, getAuctionHouseById } from "@/lib/auction-data" // Import new data functions
+import {
+  fetchLotByIdForClient,
+  fetchAuctionByIdForClient,
+  fetchAuctionHouseByIdForClient,
+} from "@/app/actions/data-fetching" // Import new Server Actions
 
 // Helper function to determine bid increment based on current price
 const getBidIncrement = (currentPrice: number): number => {
@@ -33,14 +37,14 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-      const fetchedLot = await getLotById(lotId)
+      const fetchedLot = await fetchLotByIdForClient(lotId) // Call Server Action
       setLot(fetchedLot)
 
       if (fetchedLot) {
-        const fetchedAuction = await getAuctionById(fetchedLot.auction_id)
+        const fetchedAuction = await fetchAuctionByIdForClient(fetchedLot.auction_id) // Call Server Action
         setAuction(fetchedAuction)
         if (fetchedAuction) {
-          const fetchedAuctionHouse = await getAuctionHouseById(fetchedAuction.auction_house_id)
+          const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(fetchedAuction.auction_house_id) // Call Server Action
           setAuctionHouse(fetchedAuctionHouse)
         }
       }

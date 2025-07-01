@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import Image from "next/image"
-import { getAllAuctions, getAuctionHouses } from "@/lib/auction-data" // Import new data functions
+import { fetchAllAuctionsForClient, fetchAuctionHousesForClient } from "@/app/actions/data-fetching" // Import new Server Actions
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -48,8 +48,8 @@ export default function AuctionsPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-      const fetchedAuctions = await getAllAuctions()
-      const fetchedAuctionHouses = await getAuctionHouses()
+      const fetchedAuctions = await fetchAllAuctionsForClient() // Call Server Action
+      const fetchedAuctionHouses = await fetchAuctionHousesForClient() // Call Server Action
       setAuctions(fetchedAuctions)
       setAuctionHouses(fetchedAuctionHouses)
       setLoading(false)
