@@ -3,7 +3,10 @@
 import { createClient } from "@/supabase/server"
 import { v4 as uuidv4 } from "uuid"
 
-export async function uploadImage(prevState: { error: string | null; url: string | null }, formData: FormData) {
+export async function uploadImage(
+  prevState: { error: string | null; url: string | null; success: boolean },
+  formData: FormData,
+) {
   const supabase = createClient()
   const {
     data: { user },
@@ -11,18 +14,18 @@ export async function uploadImage(prevState: { error: string | null; url: string
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    return { error: "Пользователь не авторизован.", url: null }
+    return { error: "Пользователь не авторизован.", url: null, success: false }
   }
 
   const file = formData.get("file") as File
   const folder = formData.get("folder") as string // e.g., 'auction_images', 'lot_images', 'auction_house_logos'
 
   if (!file || file.size === 0) {
-    return { error: "Файл не выбран или пуст.", url: null }
+    return { error: "Файл не выбран или пуст.", url: null, success: false }
   }
 
   if (!folder) {
-    return { error: "Не указана папка для загрузки.", url: null }
+    return { error: "Не указана папка для загрузки.", url: null, success: false }
   }
 
   const fileExt = file.name.split(".").pop()
@@ -36,14 +39,14 @@ export async function uploadImage(prevState: { error: string | null; url: string
 
   if (error) {
     console.error("Error uploading image:", error)
-    return { error: `Ошибка загрузки изображения: ${error.message}`, url: null }
+    return { error: `Ошибка загрузки изображения: ${error.message}`, url: null, success: false }
   }
 
   const { data: publicUrlData } = supabase.storage.from("auction-images").getPublicUrl(filePath)
 
   if (!publicUrlData || !publicUrlData.publicUrl) {
-    return { error: "Не удалось получить публичный URL изображения.", url: null }
+    return { error: "Не удалось получить публичный URL изображения.", url: null, success: false }
   }
 
-  return { error: null, url: publicUrlData.publicUrl }
+  return { error: null, url: publicUrlData.publicUrl, success: true }
 }

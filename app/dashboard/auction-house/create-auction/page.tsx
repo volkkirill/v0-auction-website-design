@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, X } from "lucide-react"
-import { upsertAuction, upsertLot } from "@/app/actions/auction-house-management" // Use upsert actions
-import { uploadImage } from "@/app/actions/image-upload" // Import image upload action
+import { Plus, X, Loader2 } from "lucide-react" // Import Loader2 for spinner
+import { upsertAuction, upsertLot } from "@/app/actions/auction-house-management"
+import { uploadImage } from "@/app/actions/image-upload"
 import { createClient } from "@/supabase/client"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -23,11 +23,15 @@ export default function CreateAuctionPage() {
   const [loading, setLoading] = useState(true)
   const [auctionImageFile, setAuctionImageFile] = useState<File | null>(null)
   const [auctionImageUrl, setAuctionImageUrl] = useState<string | null>(null)
-  const [isDraft, setIsDraft] = useState(false) // New state for draft status
+  const [isDraft, setIsDraft] = useState(false)
 
   const [auctionState, auctionAction, isAuctionPending] = useActionState(upsertAuction, { error: null, success: false })
   const [lotState, lotAction, isLotPending] = useActionState(upsertLot, { error: null, success: false })
-  const [uploadState, uploadAction, isUploadPending] = useActionState(uploadImage, { error: null, url: null })
+  const [uploadState, uploadAction, isUploadPending] = useActionState(uploadImage, {
+    error: null,
+    url: null,
+    success: false,
+  }) // Added success to initial state
 
   const router = useRouter()
   const supabase = createClient()
@@ -51,11 +55,11 @@ export default function CreateAuctionPage() {
           setAuctionHouseId(profile.auction_house_id)
         } else {
           console.error("User is not an auction house or profile not found.")
-          router.push("/dashboard/auction-house") // Redirect if not authorized
+          router.push("/dashboard/auction-house")
         }
       } else {
         console.error("Error fetching user:", userError)
-        router.push("/auth/sign-in") // Redirect to login if not authenticated
+        router.push("/auth/sign-in")
       }
       setLoading(false)
     }
@@ -71,6 +75,7 @@ export default function CreateAuctionPage() {
       formData.append("folder", "auction_images")
       const result = await uploadAction(formData)
       if (result.success && result.url) {
+        // Check result.success and result.url
         setAuctionImageUrl(result.url)
       } else {
         alert(result.error || "Ошибка загрузки изображения аукциона.")
@@ -94,8 +99,9 @@ export default function CreateAuctionPage() {
       const formData = new FormData()
       formData.append("file", file)
       formData.append("folder", "lot_images")
-      const result = await uploadAction(formData) // Reusing the same upload action state for simplicity
+      const result = await uploadAction(formData)
       if (result.success && result.url) {
+        // Check result.success and result.url
         const newLots = [...lots]
         newLots[lotIndex].image_urls = [result.url] // Assuming one image per lot for now
         setLots(newLots)
@@ -140,20 +146,16 @@ export default function CreateAuctionPage() {
       return
     }
 
-    // If auction creation is successful, proceed with lots
-    // Note: upsertAuction returns the created auction data, but useActionState doesn't expose it directly.
-    // For simplicity, we'll assume the auction was created and revalidate paths.
-    // In a more robust solution, you'd get the auction ID back from the action.
-    // For now, we'll rely on the revalidation.
-
     // For each lot, call upsertLot
     for (const lot of lots) {
       const lotFormData = new FormData()
-      lotFormData.append("auctionId", auctionResult.auctionId || "DUMMY_AUCTION_ID") // Placeholder, ideally get real ID
+      lotFormData.append("auctionId", auctionResult.auctionId) // Use the actual auctionId returned
       lotFormData.append("name", lot.name)
       lotFormData.append("description", lot.description)
       lotFormData.append("initial_price", String(lot.initial_price))
       lotFormData.append("image_urls", JSON.stringify(lot.image_urls)) // Pass as JSON string
+
+      console.log(`create-auction: Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
 
       const lotResult = await lotAction(lotFormData)
       if (lotResult.error) {
@@ -212,14 +214,17 @@ export default function CreateAuctionPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="auction-image">Изображение аукциона</Label>
-                <Input
-                  id="auction-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAuctionImageUpload}
-                  disabled={isUploadPending}
-                />
-                {isUploadPending && <p className="text-muted-foreground text-sm">Загрузка изображения...</p>}
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="auction-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAuctionImageUpload}
+                    disabled={isUploadPending}
+                    className="flex-grow"
+                  />
+                  {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                </div>
                 {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
                 {auctionImageUrl && (
                   <div className="mt-2 relative w-32 h-32">
@@ -280,14 +285,18 @@ export default function CreateAuctionPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor={`lot-image-${index}`}>Изображение лота</Label>
-                    <Input
-                      id={`lot-image-${index}`}
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => handleLotImageUpload(index, e)}
-                      disabled={isUploadPending}
-                    />
-                    {isUploadPending && <p className="text-muted-foreground text-sm">Загрузка изображения...</p>}
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id={`lot-image-${index}`}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleLotImageUpload(index, e)}
+                        disabled={isUploadPending}
+                        className="flex-grow"
+                      />
+                      {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                    </div>
+                    {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
                     {lot.image_urls?.[0] && (
                       <div className="mt-2 relative w-32 h-32">
                         <Image

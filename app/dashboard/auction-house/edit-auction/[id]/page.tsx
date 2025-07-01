@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2, Loader2 } from "lucide-react" // Import Loader2 for spinner
 import { upsertAuction, upsertLot, updateLotStatus, deleteLot } from "@/app/actions/auction-house-management"
 import { uploadImage } from "@/app/actions/image-upload"
 import { fetchAuctionByIdForClient, fetchLotsByAuctionIdForClient } from "@/app/actions/data-fetching"
@@ -30,7 +30,11 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
 
   const [auctionState, auctionAction, isAuctionPending] = useActionState(upsertAuction, { error: null, success: false })
   const [lotState, lotAction, isLotPending] = useActionState(upsertLot, { error: null, success: false })
-  const [uploadState, uploadAction, isUploadPending] = useActionState(uploadImage, { error: null, url: null })
+  const [uploadState, uploadAction, isUploadPending] = useActionState(uploadImage, {
+    error: null,
+    url: null,
+    success: false,
+  }) // Added success to initial state
   const [lotStatusState, lotStatusAction, isLotStatusPending] = useActionState(updateLotStatus, {
     error: null,
     success: false,
@@ -109,6 +113,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       formData.append("folder", "auction_images")
       const result = await uploadAction(formData)
       if (result.success && result.url) {
+        // Check result.success and result.url
         setAuctionImageUrl(result.url)
       } else {
         alert(result.error || "Ошибка загрузки изображения аукциона.")
@@ -134,6 +139,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       formData.append("folder", "lot_images")
       const result = await uploadAction(formData)
       if (result.success && result.url) {
+        // Check result.success and result.url
         const newLots = [...lots]
         newLots[lotIndex].image_urls = [result.url]
         setLots(newLots)
@@ -197,6 +203,8 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     lotFormData.append("description", lot.description)
     lotFormData.append("initial_price", String(lot.initial_price))
     lotFormData.append("image_urls", JSON.stringify(lot.image_urls))
+
+    console.log(`edit-auction: Submitting lot ${lot.name} with image_urls:`, lot.image_urls) // LOGGING
 
     const result = await lotAction(lotFormData)
     if (result.error) {
@@ -270,14 +278,17 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
               </div>
               <div className="space-y-2">
                 <Label htmlFor="auction-image">Изображение аукциона</Label>
-                <Input
-                  id="auction-image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAuctionImageUpload}
-                  disabled={isUploadPending}
-                />
-                {isUploadPending && <p className="text-muted-foreground text-sm">Загрузка изображения...</p>}
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="auction-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAuctionImageUpload}
+                    disabled={isUploadPending}
+                    className="flex-grow"
+                  />
+                  {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                </div>
                 {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
                 {auctionImageUrl && (
                   <div className="mt-2 relative w-32 h-32">
@@ -378,14 +389,18 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
             </div>
             <div className="space-y-2">
               <Label htmlFor={`lot-image-${index}`}>Изображение лота</Label>
-              <Input
-                id={`lot-image-${index}`}
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleLotImageUpload(index, e)}
-                disabled={isUploadPending}
-              />
-              {isUploadPending && <p className="text-muted-foreground text-sm">Загрузка изображения...</p>}
+              <div className="flex items-center gap-2">
+                <Input
+                  id={`lot-image-${index}`}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleLotImageUpload(index, e)}
+                  disabled={isUploadPending}
+                  className="flex-grow"
+                />
+                {isUploadPending && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+              </div>
+              {uploadState?.error && <p className="text-red-500 text-sm">{uploadState.error}</p>}
               {lot.image_urls?.[0] && (
                 <div className="mt-2 relative w-32 h-32">
                   <Image

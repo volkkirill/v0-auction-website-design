@@ -126,7 +126,7 @@ export async function upsertAuction(prevState: { error: string | null; success: 
   revalidatePath("/dashboard/auction-house")
   revalidatePath("/auctions")
   revalidatePath("/")
-  return { error: null, success: true }
+  return { error: null, success: true, auctionId: auction.id } // Return auctionId for lot creation
 }
 
 // Action to upsert (create or update) a lot
@@ -148,11 +148,14 @@ export async function upsertLot(prevState: { error: string | null; success: bool
   const initial_price = Number.parseFloat(formData.get("initial_price") as string)
   const image_urls_string = formData.get("image_urls") as string // This will be a JSON string of URLs
 
+  console.log("upsertLot: Received image_urls_string:", image_urls_string) // LOGGING
+
   let image_urls: string[] = []
   try {
     image_urls = JSON.parse(image_urls_string)
+    console.log("upsertLot: Parsed image_urls:", image_urls) // LOGGING
   } catch (e) {
-    console.error("Failed to parse image_urls:", e)
+    console.error("upsertLot: Failed to parse image_urls:", e) // LOGGING
     return { error: "Неверный формат URL изображений.", success: false }
   }
 
@@ -175,12 +178,14 @@ export async function upsertLot(prevState: { error: string | null; success: bool
     name,
     description,
     initial_price,
-    image_urls,
+    image_urls, // This is the parsed array
     auction_id: auctionId,
     commission_rate: 0.05, // Default
     is_featured: false, // Default
     status: "active", // Default status for new/updated lots
   }
+
+  console.log("upsertLot: Data to be inserted/updated:", lotData) // LOGGING
 
   let error: any = null
   if (lotId) {
@@ -194,6 +199,7 @@ export async function upsertLot(prevState: { error: string | null; success: bool
   }
 
   if (error) {
+    console.error("upsertLot: Supabase operation error:", error) // LOGGING
     return { error: error.message, success: false }
   }
 
