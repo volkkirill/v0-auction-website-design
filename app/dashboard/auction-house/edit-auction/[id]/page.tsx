@@ -112,11 +112,12 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       formData.append("file", file)
       formData.append("folder", "auction_images")
       const result = await uploadAction(formData)
-      if (result.success && result.url) {
-        // Check result.success and result.url
+      console.log("Auction image upload result:", result) // NEW LOG
+      if (result.success && result.url && result.url.length > 0) {
+        // Added result.url.length > 0
         setAuctionImageUrl(result.url)
       } else {
-        alert(result.error || "Ошибка загрузки изображения аукциона.")
+        alert(result.error || "Ошибка загрузки изображения аукциона: URL не получен или пуст.")
       }
     }
   }
@@ -138,13 +139,14 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       formData.append("file", file)
       formData.append("folder", "lot_images")
       const result = await uploadAction(formData)
-      if (result.success && result.url) {
-        // Check result.success and result.url
+      console.log("Lot image upload result:", result) // NEW LOG
+      if (result.success && result.url && result.url.length > 0) {
+        // Added result.url.length > 0
         const newLots = [...lots]
         newLots[lotIndex].image_urls = [result.url]
         setLots(newLots)
       } else {
-        alert(result.error || "Ошибка загрузки изображения лота.")
+        alert(result.error || "Ошибка загрузки изображения лота: URL не получен или пуст.")
       }
     }
   }
