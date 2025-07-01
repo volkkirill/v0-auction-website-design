@@ -16,19 +16,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { signUp } from "@/app/auth/sign-up/action"
 import { signIn } from "@/app/auth/sign-in/action"
 import { signOut } from "@/app/auth/sign-out/action"
 import { createClient } from "@/supabase/client"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
+import { RegistrationDialogContent } from "@/components/auth/registration-dialog-content" // Import new component
 
 export function Header() {
   const { theme, setTheme } = useTheme()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const [registrationState, registrationAction, isRegistrationPending] = useActionState(signUp, { error: null })
   const [loginState, loginAction, isLoginPending] = useActionState(signIn, { error: null })
   const [user, setUser] = useState<SupabaseUser | null>(null)
-  const [userRole, setUserRole] = useState<string | null>(null) // New state for user role
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   const supabase = createClient()
 
@@ -44,7 +43,7 @@ export function Header() {
         if (profile && !error) {
           setUserRole(profile.role)
         } else {
-          setUserRole("buyer") // Default to buyer if no role found
+          setUserRole("buyer")
         }
       } else {
         setUserRole(null)
@@ -58,7 +57,6 @@ export function Header() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null)
       if (session?.user) {
-        // Re-fetch role on auth state change
         supabase
           .from("profiles")
           .select("role")
@@ -176,34 +174,7 @@ export function Header() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="bg-card text-card-foreground border-border p-6 shadow-lg rounded-lg">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-bold">Регистрация</DialogTitle>
-                    <DialogDescription className="text-muted-foreground">Создайте новый аккаунт.</DialogDescription>
-                  </DialogHeader>
-                  <form action={registrationAction}>
-                    <div className="grid gap-4 py-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input id="email" name="email" type="email" placeholder="ваша@почта.ru" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="password">Пароль</Label>
-                        <Input id="password" name="password" type="password" required />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="confirm-password">Повторите пароль</Label>
-                        <Input id="confirm-password" name="confirm-password" type="password" required />
-                      </div>
-                      {registrationState?.error && <p className="text-red-500 text-sm">{registrationState.error}</p>}
-                    </div>
-                    <Button
-                      type="submit"
-                      className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                      disabled={isRegistrationPending}
-                    >
-                      {isRegistrationPending ? "Регистрация..." : "Зарегистрироваться"}
-                    </Button>
-                  </form>
+                  <RegistrationDialogContent /> {/* Use the new component here */}
                 </DialogContent>
               </Dialog>
 
@@ -331,36 +302,7 @@ export function Header() {
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-card text-card-foreground border-border p-6 shadow-lg rounded-lg">
-                        <DialogHeader>
-                          <DialogTitle>Регистрация</DialogTitle>
-                          <DialogDescription>Создайте новый аккаунт.</DialogDescription>
-                        </DialogHeader>
-                        <form action={registrationAction}>
-                          <div className="grid gap-4 py-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="mobile-email">Email</Label>
-                              <Input id="mobile-email" name="email" type="email" placeholder="ваша@почта.ru" required />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="mobile-password">Пароль</Label>
-                              <Input id="mobile-password" name="password" type="password" required />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="mobile-confirm-password">Повторите пароль</Label>
-                              <Input id="mobile-confirm-password" name="confirm-password" type="password" required />
-                            </div>
-                            {registrationState?.error && (
-                              <p className="text-red-500 text-sm">{registrationState.error}</p>
-                            )}
-                          </div>
-                          <Button
-                            type="submit"
-                            className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                            disabled={isRegistrationPending}
-                          >
-                            {isRegistrationPending ? "Регистрация..." : "Зарегистрироваться"}
-                          </Button>
-                        </form>
+                        <RegistrationDialogContent /> {/* Use the new component here */}
                       </DialogContent>
                     </Dialog>
                     {/* Mobile Login Button */}
