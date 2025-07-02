@@ -4,18 +4,23 @@ import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { approveAuctionHouse } from "@/app/admin/action"
 import { Loader2 } from "lucide-react"
+import { useRouter } from "next/navigation" // Import useRouter
 
 interface ApproveAuctionHouseButtonProps {
   auctionHouseId: string
 }
 
 export function ApproveAuctionHouseButton({ auctionHouseId }: ApproveAuctionHouseButtonProps) {
+  const router = useRouter() // Initialize useRouter
   const [state, formAction, isPending] = useActionState(approveAuctionHouse, { error: null, success: false })
 
   const handleApprove = async () => {
     const formData = new FormData()
     formData.append("auctionHouseId", auctionHouseId)
-    await formAction(formData)
+    const result = await formAction(formData)
+    if (result.success) {
+      router.refresh() // Refresh the current page to show updated data
+    }
   }
 
   return (

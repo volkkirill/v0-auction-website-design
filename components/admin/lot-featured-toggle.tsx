@@ -3,6 +3,7 @@
 import { useActionState } from "react"
 import { Switch } from "@/components/ui/switch"
 import { toggleLotFeaturedStatus } from "@/app/admin/action"
+import { useRouter } from "next/navigation" // Import useRouter
 
 interface LotFeaturedToggleProps {
   lotId: string
@@ -10,11 +11,16 @@ interface LotFeaturedToggleProps {
 }
 
 export function LotFeaturedToggle({ lotId, initialIsFeatured }: LotFeaturedToggleProps) {
+  const router = useRouter() // Initialize useRouter
   // useActionState takes the action function and an initial state
   const [state, formAction, isPending] = useActionState(
     async (prevState: { error: string | null; success: boolean }, formData: FormData) => {
       const isFeatured = formData.get("isFeatured") === "true"
-      return toggleLotFeaturedStatus(prevState, { lotId, isFeatured })
+      const result = await toggleLotFeaturedStatus(prevState, { lotId, isFeatured })
+      if (result.success) {
+        router.refresh() // Refresh the current page to show updated data
+      }
+      return result
     },
     { error: null, success: false },
   )

@@ -13,6 +13,7 @@ import {
   fetchAuctionHouseByIdForClient,
 } from "@/app/actions/data-fetching" // Import new Server Actions
 import { placeBid } from "@/app/actions/bidding" // Import the new bidding action
+import { useRouter } from "next/navigation" // Import useRouter
 
 // Helper function to determine bid increment based on current price
 const getBidIncrement = (currentPrice: number): number => {
@@ -37,6 +38,8 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
   const [bidAmount, setBidAmount] = useState<number | string>("") // State for bid input
   const [bidState, bidAction, isBidPending] = useActionState(placeBid, { error: null, success: false })
 
+  const router = useRouter() // Initialize useRouter
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
@@ -58,17 +61,12 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
     fetchData()
   }, [lotId])
 
-  // Re-fetch lot data if a bid was successful
+  // Re-fetch lot data if a bid was successful using router.refresh()
   useEffect(() => {
     if (bidState.success) {
-      const refetchLot = async () => {
-        const updatedLot = await fetchLotByIdForClient(lotId)
-        setLot(updatedLot)
-        setBidAmount(updatedLot.current_bid + getBidIncrement(updatedLot.current_bid)) // Update suggested bid
-      }
-      refetchLot()
+      router.refresh() // Refresh the current page to show updated bid
     }
-  }, [bidState.success, lotId])
+  }, [bidState.success, router])
 
   if (loading) {
     return <div className="container py-8 text-center">Загрузка лота...</div>

@@ -20,7 +20,7 @@ import {
   fetchAuctionHouseByIdForClient,
 } from "@/app/actions/data-fetching"
 import { createClient } from "@/supabase/client"
-import { useRouter } from "next/navigation"
+import { useRouter } from "next/navigation" // Import useRouter
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 
@@ -55,7 +55,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     success: false,
   })
 
-  const router = useRouter()
+  const router = useRouter() // Initialize useRouter
   const supabase = createClient()
 
   const fetchData = async () => {
@@ -97,7 +97,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
         }
       } else {
         console.error("User is not an auction house or profile not found.")
-        router.push("/dashboard/auction-house")
+        router.push("/auth/sign-in")
       }
     } else {
       console.error("Error fetching user:", userError)
@@ -119,9 +119,16 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       lotStatusState.success ||
       deleteLotState.success
     ) {
-      fetchData()
+      router.refresh() // Refresh the current page to show updated data
     }
-  }, [auctionState.success, lotState.success, uploadState.success, lotStatusState.success, deleteLotState.success])
+  }, [
+    auctionState.success,
+    lotState.success,
+    uploadState.success,
+    lotStatusState.success,
+    deleteLotState.success,
+    router,
+  ])
 
   const handleAuctionImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -214,7 +221,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       alert(`Ошибка обновления аукциона: ${result.error}`)
     } else if (result.success) {
       alert("Аукцион успешно обновлен!")
-      // No redirect, stay on page to allow lot editing
+      // router.refresh() is handled by the useEffect above
     }
   }
 
@@ -260,6 +267,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       alert(`Ошибка сохранения лота ${lot.name}: ${result.error}`)
     } else if (result.success) {
       alert(`Лот ${lot.name} успешно сохранен!`)
+      // router.refresh() is handled by the useEffect above
     }
   }
 
@@ -269,6 +277,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     formData.append("lotId", lotId)
     formData.append("status", newStatus)
     await lotStatusAction(formData)
+    // router.refresh() is handled by the useEffect above
   }
 
   if (loading) {
