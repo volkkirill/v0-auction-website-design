@@ -3,27 +3,22 @@ import { Hammer } from "lucide-react"
 
 export function Footer() {
   return (
-    <footer className="bg-muted py-8 w-full border-t border-border">
-      <div className="container flex flex-col items-center justify-between gap-4 md:flex-row px-4 md:px-6">
-        <div className="flex items-center gap-2">
+    <footer className="w-full shrink-0 border-t bg-background py-6">
+      <div className="container flex flex-col items-center justify-between gap-4 px-4 md:flex-row md:px-6">
+        <Link href="/" className="flex items-center gap-2 text-lg font-semibold md:text-base">
           <Hammer className="h-6 w-6 text-primary" />
-          <span className="text-lg font-semibold text-foreground">Молоток.Ру</span>
-        </div>
-        <nav className="flex flex-wrap justify-center gap-4 text-sm md:gap-6">
-          <Link href="/about" className="text-muted-foreground hover:text-primary" prefetch={false}>
-            О нас
-          </Link>
-          <Link href="/support" className="text-muted-foreground hover:text-primary" prefetch={false}>
-            Поддержка
-          </Link>
-          <Link href="/privacy" className="text-muted-foreground hover:text-primary" prefetch={false}>
+          <span className="sr-only">Молоток.Ру</span>
+          <span>Молоток.Ру</span>
+        </Link>
+        <p className="text-sm text-muted-foreground">&copy; 2024 Молоток.Ру. Все права защищены.</p>
+        <nav className="flex gap-4 sm:gap-6">
+          <Link href="/privacy-policy" className="text-sm hover:underline underline-offset-4" prefetch={false}>
             Политика конфиденциальности
           </Link>
-          <Link href="/terms" className="text-muted-foreground hover:text-primary" prefetch={false}>
+          <Link href="/terms-of-use" className="text-sm hover:underline underline-offset-4" prefetch={false}>
             Условия использования
           </Link>
         </nav>
-        <p className="text-sm text-muted-foreground">© 2025 Молоток.Ру. Все права защищены.</p>
       </div>
     </footer>
   )

@@ -14,6 +14,22 @@ export async function placeBid(prevState: { error: string | null; success: boole
     return { error: "Пользователь не авторизован. Пожалуйста, войдите, чтобы сделать ставку.", success: false }
   }
 
+  // Fetch user profile to check role
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile) {
+    console.error("Error fetching user profile:", profileError)
+    return { error: "Не удалось получить ваш профиль. Пожалуйста, попробуйте снова.", success: false }
+  }
+
+  if (profile.role === "auction_house" || profile.role === "admin") {
+    return { error: "Аукционные дома и администраторы не могут делать ставки.", success: false }
+  }
+
   const lotId = formData.get("lotId") as string
   const bidAmount = Number.parseFloat(formData.get("bidAmount") as string)
 

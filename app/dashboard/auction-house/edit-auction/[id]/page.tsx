@@ -84,6 +84,10 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
           setAuction(fetchedAuction)
           setAuctionImageUrl(fetchedAuction.image_url)
           setIsDraft(fetchedAuction.status === "draft")
+          // If auction is not a draft, disable the checkbox
+          if (fetchedAuction.status !== "draft") {
+            setIsDraft(false) // Ensure it's false if not a draft
+          }
 
           const fetchedLots = await fetchLotsByAuctionIdForClient(auctionId, true) // Include removed lots for editing
           setLots(fetchedLots.map((lot: any) => ({ ...lot, is_saving: false }))) // Add is_saving state
@@ -341,6 +345,19 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="commission_percentage">Комиссия аукционного дома (%)</Label>
+                  <Input
+                    id="commission_percentage"
+                    name="commission_percentage"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    defaultValue={auction.commission_percentage}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="auction-image">Изображение аукциона</Label>
                   <div className="flex items-center gap-2">
                     <Input
@@ -371,6 +388,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
                     id="is-draft"
                     checked={isDraft}
                     onCheckedChange={(checked: boolean) => setIsDraft(checked)}
+                    disabled={auction.status !== "draft"} // Disable if not a draft
                   />
                   <Label htmlFor="is-draft">Сохранить как черновик (не публиковать сразу)</Label>
                 </div>

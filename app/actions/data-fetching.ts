@@ -8,6 +8,7 @@ import {
   getAuctionHouseById,
   getLotsByAuctionId,
   getFeaturedLots,
+  getAuctionsByAuctionHouseId, // Import the new function
 } from "@/lib/auction-data"
 import { createClient } from "@/supabase/server"
 
@@ -44,6 +45,11 @@ export async function fetchLotsByAuctionIdForClient(auctionId: string, includeRe
 // Server Action to fetch featured lots for client components
 export async function fetchFeaturedLotsForClient() {
   return await getFeaturedLots()
+}
+
+// Server Action to fetch auctions by auction house ID for client components
+export async function fetchAuctionsByAuctionHouseIdForClient(auctionHouseId: string) {
+  return await getAuctionsByAuctionHouseId(auctionHouseId)
 }
 
 // Server Action to fetch user's active bids

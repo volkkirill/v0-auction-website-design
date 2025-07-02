@@ -3,8 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Image from "next/image"
 import { getFeaturedLots, getAllAuctions, getAuctionHouses, images } from "@/lib/auction-data"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
-import { RegistrationDialogContent } from "@/components/auth/registration-dialog-content" // Import the new component
+import { RegisterButton } from "@/components/auth/register-button" // Import the new client component
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -70,17 +69,7 @@ export default async function HomePage() {
               <Link href="/auctions" passHref>
                 <Button className="bg-primary text-primary-foreground hover:bg-primary/90">Посмотреть аукционы</Button>
               </Link>
-              {/* Registration Modal Trigger */}
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="border-primary text-primary hover:bg-primary/10 bg-transparent">
-                    Зарегистрироваться
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-card text-card-foreground border-border p-6 shadow-lg rounded-lg">
-                  <RegistrationDialogContent /> {/* Use the new component here */}
-                </DialogContent>
-              </Dialog>
+              <RegisterButton /> {/* Use the new client component here */}
             </div>
           </div>
 
@@ -161,6 +150,9 @@ export default async function HomePage() {
                         >
                           {auctionHouse?.name || "Неизвестно"}
                         </Link>
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Комиссия: <span className="font-bold text-primary">{auction.commission_percentage}%</span>
                       </p>
                     </CardContent>
                     <div className="p-4 pt-0">

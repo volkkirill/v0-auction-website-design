@@ -78,32 +78,33 @@ export async function upsertAuction(
     return { error: "Пользователь не авторизован.", success: false }
   }
 
+  const auctionId = formData.get("auctionId") as string | null
   const auctionHouseId = formData.get("auctionHouseId") as string
-  const auctionId = formData.get("auctionId") as string | null // Will be null for new auctions
-
-  if (!(await checkAuctionHouseOwner(user.id, auctionHouseId))) {
-    return { error: "У вас нет прав для создания/редактирования аукциона для этого аукционного дома.", success: false }
-  }
-
   const title = formData.get("title") as string
   const description = formData.get("description") as string
-  const start_time = formData.get("start_time") as string
+  const startTime = formData.get("start_time") as string
   const category = formData.get("category") as string
-  const image_url = formData.get("image_url") as string // This will be the public URL from storage
-  const status = formData.get("status") as string // 'upcoming' or 'draft'
+  const imageUrl = formData.get("image_url") as string
+  const status = formData.get("status") as string
+  const commissionPercentage = Number.parseFloat(formData.get("commission_percentage") as string)
 
-  const auctionData = {
-    title,
-    description,
-    start_time,
-    category,
-    image_url,
-    auction_house_id: auctionHouseId,
-    status,
+  if (isNaN(commissionPercentage) || commissionPercentage < 0 || commissionPercentage > 100) {
+    return { error: "Процент комиссии должен быть числом от 0 до 100.", success: false }
   }
 
-  let error: any = null
-  let auction: any = null
+  const auctionData = {
+    auction_house_id: auctionHouseId,
+    title,
+    description,
+    start_time: startTime,
+    category,
+    image_url: imageUrl,
+    status,
+    commission_percentage: commissionPercentage,
+  }
+
+  let error = null
+  let auction = null
 
   if (auctionId) {
     // Update existing auction
@@ -113,27 +114,31 @@ export async function upsertAuction(
       .eq("id", auctionId)
       .select()
       .single()
-    auction = data
     error = updateError
-  } else {
-    // Create new auction
-    const { data, error: insertError } = await supabase.from("auctions").insert(auctionData).select().single()
     auction = data
+  } else {
+    // Insert new auction
+    const { data, error: insertError } = await supabase.from("auctions").insert(auctionData).select().single()
     error = insertError
+    auction = data
   }
 
   if (error) {
+    console.error("Error upserting auction:", error)
     return { error: error.message, success: false }
   }
 
   revalidatePath("/dashboard/auction-house")
   revalidatePath("/auctions")
   revalidatePath("/")
-  return { error: null, success: true, auctionId: auction.id } // Return auctionId for lot creation
+  return { error: null, success: true, auctionId: auction?.id, auction }
 }
 
 // Action to upsert (create or update) a lot
-export async function upsertLot(prevState: { error: string | null; success: boolean }, formData: FormData) {
+export async function upsertLot(
+  prevState: { error: string | null; success: boolean; lotIndex: number },
+  formData: FormData,
+) {
   const supabase = createClient()
   const {
     data: { user },
@@ -141,94 +146,60 @@ export async function upsertLot(prevState: { error: string | null; success: bool
   } = await supabase.auth.getUser()
 
   if (userError || !user) {
-    return { error: "Пользователь не авторизован.", success: false }
+    return { error: "Пользователь не авторизован.", success: false, lotIndex: prevState.lotIndex }
   }
 
   const lotId = formData.get("lotId") as string | null
   const auctionId = formData.get("auctionId") as string
   const name = formData.get("name") as string
   const description = formData.get("description") as string
-  const initial_price = Number.parseFloat(formData.get("initial_price") as string)
-  const image_urls_string = formData.get("image_urls") as string // This will be a JSON string of URLs
+  const initialPrice = Number.parseFloat(formData.get("initial_price") as string)
+  const imageUrlsRaw = formData.get("image_urls") as string
+  let imageUrls: string[] = []
 
-  console.log("upsertLot (Server Action): Received image_urls_string:", image_urls_string) // LOGGING
-
-  let image_urls: string[] = []
   try {
-    image_urls = JSON.parse(image_urls_string)
-    console.log("upsertLot (Server Action): Parsed image_urls:", image_urls) // LOGGING
-  } catch (e) {
-    console.error("upsertLot (Server Action): Failed to parse image_urls:", e) // LOGGING
-    return { error: "Неверный формат URL изображений.", success: false }
-  }
-
-  // Verify user owns the auction house associated with this auction
-  const { data: auction, error: auctionError } = await supabase
-    .from("auctions")
-    .select("auction_house_id")
-    .eq("id", auctionId)
-    .single()
-
-  if (auctionError || !auction) {
-    return { error: "Аукцион не найден.", success: false }
-  }
-
-  if (!(await checkAuctionHouseOwner(user.id, auction.auction_house_id))) {
-    return { error: "У вас нет прав для создания/редактирования лота для этого аукциона.", success: false }
-  }
-
-  let currentIsFeatured = false // Default for new lots
-  let currentStatus = "active" // Default for new lots
-
-  if (lotId) {
-    // If updating an existing lot, fetch its current is_featured and status
-    const { data: existingLot, error: fetchLotError } = await supabase
-      .from("lots")
-      .select("is_featured, status")
-      .eq("id", lotId)
-      .single()
-
-    if (fetchLotError || !existingLot) {
-      console.error("upsertLot (Server Action): Error fetching existing lot for update:", fetchLotError) // LOGGING
-      return { error: "Не удалось получить существующий лот для обновления.", success: false }
+    imageUrls = JSON.parse(imageUrlsRaw)
+    if (!Array.isArray(imageUrls)) {
+      throw new Error("image_urls is not an array")
     }
-    currentIsFeatured = existingLot.is_featured
-    currentStatus = existingLot.status // Preserve existing status
+  } catch (e) {
+    console.error("Failed to parse image_urls:", e)
+    return { error: "Неверный формат URL изображений.", success: false, lotIndex: prevState.lotIndex }
+  }
+
+  if (isNaN(initialPrice) || initialPrice <= 0) {
+    return { error: "Начальная цена должна быть положительным числом.", success: false, lotIndex: prevState.lotIndex }
   }
 
   const lotData = {
+    auction_id: auctionId,
     name,
     description,
-    initial_price,
-    image_urls, // This is the parsed array
-    auction_id: auctionId,
-    commission_rate: 0.05, // Default
-    is_featured: currentIsFeatured, // Preserve existing or default to false
-    status: currentStatus, // Preserve existing or default to active
+    initial_price: initialPrice,
+    current_bid: initialPrice, // Set current bid to initial price on creation/update
+    image_urls: imageUrls,
   }
 
-  console.log("upsertLot (Server Action): Data to be inserted/updated:", lotData) // LOGGING
+  let error = null
 
-  let error: any = null
-  if (lotId) {
+  if (lotId && lotId !== "undefined") {
     // Update existing lot
     const { error: updateError } = await supabase.from("lots").update(lotData).eq("id", lotId)
     error = updateError
   } else {
-    // Create new lot
-    const { error: insertError } = await supabase.from("lots").insert({ ...lotData, current_bid: initial_price })
+    // Insert new lot
+    const { error: insertError } = await supabase.from("lots").insert(lotData)
     error = insertError
   }
 
   if (error) {
-    console.error("upsertLot (Server Action): Supabase operation error:", error) // LOGGING
-    return { error: error.message, success: false }
+    console.error("Error upserting lot:", error)
+    return { error: error.message, success: false, lotIndex: prevState.lotIndex }
   }
 
   revalidatePath(`/auctions/${auctionId}`)
   revalidatePath("/dashboard/auction-house")
-  revalidatePath("/")
-  return { error: null, success: true }
+  return { error: null, success: true, lotIndex: prevState.lotIndex }
 }
 
 // Action to update lot status (e.g., 'removed')
@@ -244,32 +215,17 @@ export async function updateLotStatus(prevState: { error: string | null; success
   }
 
   const lotId = formData.get("lotId") as string
-  const newStatus = formData.get("status") as string
+  const status = formData.get("status") as string
 
-  // Verify user owns the auction house associated with this lot
-  const { data: lot, error: lotFetchError } = await supabase
-    .from("lots")
-    .select("auction_id, auctions(auction_house_id)")
-    .eq("id", lotId)
-    .single()
-
-  if (lotFetchError || !lot || !lot.auctions?.auction_house_id) {
-    return { error: "Лот не найден или не удалось определить его аукционный дом.", success: false }
-  }
-
-  if (!(await checkAuctionHouseOwner(user.id, lot.auctions.auction_house_id))) {
-    return { error: "У вас нет прав для изменения статуса этого лота.", success: false }
-  }
-
-  const { error } = await supabase.from("lots").update({ status: newStatus }).eq("id", lotId)
+  const { error } = await supabase.from("lots").update({ status }).eq("id", lotId)
 
   if (error) {
+    console.error("Error updating lot status:", error)
     return { error: error.message, success: false }
   }
 
   revalidatePath(`/lots/${lotId}`)
   revalidatePath("/dashboard/auction-house")
-  revalidatePath("/")
   return { error: null, success: true }
 }
 
@@ -287,29 +243,13 @@ export async function deleteLot(prevState: { error: string | null; success: bool
 
   const lotId = formData.get("lotId") as string
 
-  // Verify user owns the auction house associated with this lot
-  const { data: lot, error: lotFetchError } = await supabase
-    .from("lots")
-    .select("auction_id, auctions(auction_house_id)")
-    .eq("id", lotId)
-    .single()
-
-  if (lotFetchError || !lot || !lot.auctions?.auction_house_id) {
-    return { error: "Лот не найден или не удалось определить его аукционный дом.", success: false }
-  }
-
-  if (!(await checkAuctionHouseOwner(user.id, lot.auctions.auction_house_id))) {
-    return { error: "У вас нет прав для удаления этого лота.", success: false }
-  }
-
   const { error } = await supabase.from("lots").delete().eq("id", lotId)
 
   if (error) {
+    console.error("Error deleting lot:", error)
     return { error: error.message, success: false }
   }
 
-  revalidatePath(`/auctions/${lot.auction_id}`)
   revalidatePath("/dashboard/auction-house")
-  revalidatePath("/")
   return { error: null, success: true }
 }

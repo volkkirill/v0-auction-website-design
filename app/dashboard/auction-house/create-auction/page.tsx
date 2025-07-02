@@ -1,7 +1,5 @@
 "use client"
 
-import Link from "next/link"
-
 import type React from "react"
 
 import { useState, useEffect, useActionState } from "react"
@@ -19,6 +17,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 import { fetchAuctionHouseByIdForClient } from "@/app/actions/data-fetching" // Import to check AH status
+import Link from "next/link"
 
 export default function CreateAuctionPage() {
   const [lots, setLots] = useState<any[]>([])
@@ -319,6 +318,19 @@ export default function CreateAuctionPage() {
                       <SelectItem value="Антиквариат">Антиквариат</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="commission_percentage">Комиссия аукционного дома (%)</Label>
+                  <Input
+                    id="commission_percentage"
+                    name="commission_percentage"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max="100"
+                    defaultValue="0.00"
+                    required
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="auction-image">Изображение аукциона</Label>

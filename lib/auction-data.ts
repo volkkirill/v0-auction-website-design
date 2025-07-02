@@ -87,6 +87,20 @@ export async function getFeaturedLots() {
   return data
 }
 
+export async function getAuctionsByAuctionHouseId(auctionHouseId: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from("auctions")
+    .select("*")
+    .eq("auction_house_id", auctionHouseId)
+    .order("start_time", { ascending: true })
+  if (error) {
+    console.error(`Error fetching auctions for auction house ID ${auctionHouseId}:`, error)
+    return []
+  }
+  return data
+}
+
 // Dummy images (can be replaced with actual image uploads later)
 export const images = {
   heroBg:
