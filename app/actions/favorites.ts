@@ -14,19 +14,18 @@ export async function toggleFavoriteLot(prevState: { error: string | null; succe
     return { error: "Пользователь не авторизован.", success: false }
   }
 
-  // Optional: Check if user is a buyer (auction houses/admins shouldn't favorite)
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .single()
   if (profileError || !profile || profile.role !== "buyer") {
+    // Return early if not a buyer or error fetching profile
     return { error: "Только покупатели могут добавлять лоты в избранное.", success: false }
   }
 
   const lotId = formData.get("lotId") as string
 
-  // Check if already favorited
   const { data: existingFavorite, error: fetchError } = await supabase
     .from("user_favorites")
     .select("id")
@@ -35,35 +34,32 @@ export async function toggleFavoriteLot(prevState: { error: string | null; succe
     .single()
 
   if (fetchError && fetchError.code !== "PGRST116") {
-    // PGRST116 means "no rows found"
     console.error("Error checking existing favorite:", fetchError)
     return { error: "Ошибка при проверке избранного.", success: false }
   }
 
   if (existingFavorite) {
-    // Remove from favorites
     const { error: deleteError } = await supabase.from("user_favorites").delete().eq("id", existingFavorite.id)
 
     if (deleteError) {
       console.error("Error removing favorite:", deleteError)
       return { error: `Ошибка при удалении из избранного: ${deleteError.message}`, success: false }
     }
-    revalidatePath(`/lots/${lotId}`)
-    revalidatePath(`/auctions`) // Revalidate main auctions page if it shows featured lots
-    revalidatePath(`/`) // Revalidate homepage if it shows featured lots
-    revalidatePath(`/dashboard/buyer`)
+    // Revalidate paths for server components that display favorite status
+    revalidatePath(`/lots/${lotId}`) // For individual lot page, if it's a server component
+    revalidatePath(`/auctions/[id]`) // For auction detail page, if it lists lots with favorite status
+    revalidatePath(`/dashboard/buyer`) // For buyer dashboard (even if client component, revalidate for consistency)
     return { error: null, success: true }
   } else {
-    // Add to favorites
     const { error: insertError } = await supabase.from("user_favorites").insert({ user_id: user.id, lot_id: lotId })
 
     if (insertError) {
       console.error("Error adding favorite:", insertError)
       return { error: `Ошибка при добавлении в избранное: ${insertError.message}`, success: false }
     }
+    // Revalidate paths for server components that display favorite status
     revalidatePath(`/lots/${lotId}`)
-    revalidatePath(`/auctions`)
-    revalidatePath(`/`)
+    revalidatePath(`/auctions/[id]`)
     revalidatePath(`/dashboard/buyer`)
     return { error: null, success: true }
   }
@@ -127,7 +123,6 @@ export async function fetchUserFavoriteLots() {
     return []
   }
 
-  // Flatten the structure for easier consumption
   return data
     .map((fav) => ({
       id: fav.lots?.id,
@@ -135,8 +130,9 @@ export async function fetchUserFavoriteLots() {
       description: fav.lots?.description,
       image: fav.lots?.image_urls?.[0],
       currentBid: fav.lots?.current_bid,
+      auctionId: fav.lots?.auction_id, // Add auctionId for linking
       auctionTitle: fav.lots?.auctions?.title,
       auctionStartTime: fav.lots?.auctions?.start_time,
     }))
-    .filter((lot) => lot.id !== null) // Filter out any null lots if related lot was deleted
+    .filter((lot) => lot.id !== null)
 }

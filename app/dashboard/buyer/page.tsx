@@ -9,13 +9,13 @@ import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/supabase/client"
 import { fetchUserActiveBids } from "@/app/actions/data-fetching"
-import { fetchUserFavoriteLots } from "@/app/actions/favorites" // Import new action for favorites
-import { FavoriteButton } from "@/components/favorite-button" // Import FavoriteButton
+import { fetchUserFavoriteLots } from "@/app/actions/favorites"
+import { FavoriteButton } from "@/components/favorite-button"
 
 export default function BuyerDashboardPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [activeBids, setActiveBids] = useState<any[]>([])
-  const [favoriteLots, setFavoriteLots] = useState<any[]>([]) // New state for favorite lots
+  const [favoriteLots, setFavoriteLots] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
@@ -31,7 +31,7 @@ export default function BuyerDashboardPage() {
       if (user && !userError) {
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("email, phone, role") // Select role to ensure it's a buyer
+          .select("email, phone, role")
           .eq("id", user.id)
           .single()
 
@@ -57,6 +57,18 @@ export default function BuyerDashboardPage() {
     }
     fetchUserData()
   }, [supabase])
+
+  // Callback to update favoriteLots state when a lot is unfavorited from the dashboard
+  const handleFavoriteToggleSuccess = (lotId: string, newIsFavorited: boolean) => {
+    if (!newIsFavorited) {
+      // If the lot was unfavorited (newIsFavorited is false), remove it from the local state
+      setFavoriteLots((prevLots) => prevLots.filter((lot) => lot.id !== lotId))
+    }
+    // If newIsFavorited is true (added to favorites), router.refresh() in FavoriteButton will handle revalidation.
+    // However, since we're only displaying FAVORITED items here, adding new items
+    // will require a full re-fetch or navigating away and back. For this context,
+    // we primarily care about immediate removal.
+  }
 
   if (loading) {
     return <div className="container py-8 text-center">Загрузка данных пользователя...</div>
@@ -154,7 +166,11 @@ export default function BuyerDashboardPage() {
                           className="rounded-t-md object-cover w-full h-48"
                         />
                         <div className="absolute top-2 right-2">
-                          <FavoriteButton lotId={lot.id} initialIsFavorited={true} />
+                          <FavoriteButton
+                            lotId={lot.id}
+                            initialIsFavorited={true}
+                            onToggleSuccess={handleFavoriteToggleSuccess}
+                          />
                         </div>
                       </CardHeader>
                       <CardContent className="p-4 flex-grow">
@@ -165,10 +181,7 @@ export default function BuyerDashboardPage() {
                         </p>
                         <p className="text-sm text-muted-foreground">
                           Аукцион:{" "}
-                          <Link
-                            href={`/auctions/${lot.lots?.auction_id}`}
-                            className="font-bold text-primary hover:underline"
-                          >
+                          <Link href={`/auctions/${lot.auctionId}`} className="font-bold text-primary hover:underline">
                             {lot.auctionTitle}
                           </Link>
                         </p>

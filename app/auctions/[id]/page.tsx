@@ -4,9 +4,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Separator } from "@/components/ui/separator"
 import Image from "next/image"
 import { getAuctionById, getAuctionHouseById, getLotsByAuctionId } from "@/lib/auction-data"
-import { FavoriteButton } from "@/components/favorite-button" // Import FavoriteButton
-import { createClient } from "@/supabase/server" // Import server Supabase client
-import { fetchUserFavoriteLotIds } from "@/app/actions/favorites" // Import favorite action
+import { FavoriteButton } from "@/components/favorite-button"
+import { createClient } from "@/supabase/server"
+import { fetchUserFavoriteLotIds } from "@/app/actions/favorites"
 
 export default async function AuctionDetailsPage({ params }: { params: { id: string } }) {
   const auctionId = params.id
@@ -60,8 +60,6 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
               lots.map((lot) => (
                 <Card key={lot.id} className="flex flex-col">
                   <CardHeader className="p-0 relative">
-                    {" "}
-                    {/* Added relative for positioning heart */}
                     <Image
                       src={lot.image_urls?.[0] || "/placeholder.svg"}
                       alt={lot.name}

@@ -14,9 +14,9 @@ import {
 } from "@/app/actions/data-fetching"
 import { placeBid } from "@/app/actions/bidding"
 import { useRouter } from "next/navigation"
-import { FavoriteButton } from "@/components/favorite-button" // Import FavoriteButton
-import { createClient } from "@/supabase/client" // Import client Supabase
-import { fetchUserFavoriteLotIds } from "@/app/actions/favorites" // Import favorite action
+import { FavoriteButton } from "@/components/favorite-button"
+import { createClient } from "@/supabase/client"
+import { fetchUserFavoriteLotIds } from "@/app/actions/favorites"
 
 // Helper function to determine bid increment based on current price
 const getBidIncrement = (currentPrice: number): number => {
@@ -40,11 +40,11 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [bidAmount, setBidAmount] = useState<number | string>("")
   const [bidState, bidAction, isBidPending] = useActionState(placeBid, { error: null, success: false })
-  const [isFavorited, setIsFavorited] = useState(false) // Local state for favorite status
-  const [userRole, setUserRole] = useState<string | null>(null) // To check if buyer
+  const [isLotFavorited, setIsLotFavorited] = useState(false) // State to pass to FavoriteButton
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   const router = useRouter()
-  const supabase = createClient() // Initialize client Supabase
+  const supabase = createClient()
 
   useEffect(() => {
     const fetchData = async () => {
@@ -77,14 +77,14 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
           setUserRole(profile.role)
           if (profile.role === "buyer") {
             const favoriteLotIds = await fetchUserFavoriteLotIds()
-            setIsFavorited(favoriteLotIds.includes(lotId))
+            setIsLotFavorited(favoriteLotIds.includes(lotId))
           }
         }
       }
       setLoading(false)
     }
     fetchData()
-  }, [lotId, supabase]) // Add supabase to dependency array
+  }, [lotId, supabase])
 
   // Re-fetch lot data if a bid was successful using router.refresh()
   useEffect(() => {
@@ -151,8 +151,8 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h1 className="text-4xl font-bold">{lot.name}</h1>
-            {userRole === "buyer" && ( // Only show favorite button for buyers
-              <FavoriteButton lotId={lot.id} initialIsFavorited={isFavorited} size="default" variant="outline" />
+            {userRole === "buyer" && (
+              <FavoriteButton lotId={lot.id} initialIsFavorited={isLotFavorited} size="default" variant="outline" />
             )}
           </div>
           <p className="text-muted-foreground mb-6">{lot.description}</p>
@@ -186,12 +186,12 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
                   type="number"
                   placeholder="Ваша ставка"
                   className="w-full"
-                  name="bidAmount" // Add name for FormData
+                  name="bidAmount"
                   value={bidAmount}
                   onChange={(e) => setBidAmount(e.target.value)}
                   onFocus={() => setShowBidIncrementHint(true)}
                   onBlur={() => setShowBidIncrementHint(false)}
-                  min={lot.current_bid + minBidIncrement} // Set min value for input
+                  min={lot.current_bid + minBidIncrement}
                 />
                 <Button
                   type="submit"
