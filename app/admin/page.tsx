@@ -7,9 +7,29 @@ import { createClient } from "@/supabase/server"
 import { getAllAuctions } from "@/lib/auction-data" // Import getAuctionHouses
 import { LotFeaturedToggle } from "@/components/admin/lot-featured-toggle"
 import { ApproveAuctionHouseButton } from "@/components/admin/approve-auction-house-button" // New client component
+import { redirect } from "next/navigation" // Import redirect
 
 export default async function AdminDashboardPage() {
   const supabase = createClient()
+
+  // Server-side authorization check
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+  if (userError || !user) {
+    redirect("/auth/sign-in") // Redirect to login if not authenticated
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single()
+
+  if (profileError || !profile || profile.role !== "admin") {
+    redirect("/") // Redirect to home if not an admin
+  }
 
   // Fetch data directly in the Server Component
   const { data: users, error: usersError } = await supabase.from("profiles").select("*")

@@ -59,11 +59,11 @@ export default function AuctionHouseDashboardPage() {
             )
           }
         } else {
-          console.error("User is not an auction house or profile not found.")
-          router.push("/auth/sign-in")
+          // If user is logged in but not an auction_house, redirect
+          router.push("/")
         }
       } else {
-        console.error("Error fetching user:", userError)
+        // If no user, redirect to sign-in
         router.push("/auth/sign-in")
       }
       setLoading(false)
@@ -71,6 +71,11 @@ export default function AuctionHouseDashboardPage() {
 
     fetchDashboardData()
   }, [supabase, router])
+
+  // This client component will handle the redirect if the initial server-side check fails.
+  // However, for a more robust solution, the initial check should be done in a Server Component.
+  // For this specific page, since it's a client component, we rely on useEffect.
+  // For better UX, consider making this page a Server Component and fetching data there.
 
   if (loading) {
     return <div className="container py-8 text-center">Загрузка панели управления...</div>
