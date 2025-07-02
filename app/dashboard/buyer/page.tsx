@@ -8,11 +8,14 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/supabase/client"
-import { fetchUserActiveBids } from "@/app/actions/data-fetching" // Import new action for bids
+import { fetchUserActiveBids } from "@/app/actions/data-fetching"
+import { fetchUserFavoriteLots } from "@/app/actions/favorites" // Import new action for favorites
+import { FavoriteButton } from "@/components/favorite-button" // Import FavoriteButton
 
 export default function BuyerDashboardPage() {
   const [userProfile, setUserProfile] = useState<any>(null)
   const [activeBids, setActiveBids] = useState<any[]>([])
+  const [favoriteLots, setFavoriteLots] = useState<any[]>([]) // New state for favorite lots
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
@@ -26,22 +29,27 @@ export default function BuyerDashboardPage() {
       } = await supabase.auth.getUser()
 
       if (user && !userError) {
-        // Fetch profile (only email and phone, no balance/stats)
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("email, phone") // Select only necessary fields
+          .select("email, phone, role") // Select role to ensure it's a buyer
           .eq("id", user.id)
           .single()
 
         if (profile && !profileError) {
           setUserProfile(profile)
+
+          // Fetch active bids
+          const fetchedActiveBids = await fetchUserActiveBids()
+          setActiveBids(fetchedActiveBids)
+
+          // Fetch favorite lots if the user is a buyer
+          if (profile.role === "buyer") {
+            const fetchedFavoriteLots = await fetchUserFavoriteLots()
+            setFavoriteLots(fetchedFavoriteLots)
+          }
         } else {
           console.error("Error fetching profile:", profileError)
         }
-
-        // Fetch active bids using the new Server Action
-        const fetchedActiveBids = await fetchUserActiveBids()
-        setActiveBids(fetchedActiveBids)
       } else {
         console.error("Error fetching user:", userError)
       }
@@ -68,7 +76,6 @@ export default function BuyerDashboardPage() {
             <CardTitle>Информация о пользователе</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {/* Removed profile update form as per request to simplify, keeping only display */}
             <div className="space-y-2 mb-4">
               <Label htmlFor="email">Email</Label>
               <Input id="email" name="email" type="email" value={userProfile.email} disabled />
@@ -77,11 +84,9 @@ export default function BuyerDashboardPage() {
               <Label htmlFor="phone">Телефон</Label>
               <Input id="phone" name="phone" type="text" value={userProfile.phone || "Не указан"} disabled />
             </div>
-            {/* Removed balance, top-up button, statistics, and transaction history */}
           </CardContent>
         </Card>
 
-        {/* Removed statistics card */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Ваши активные ставки</CardTitle>
@@ -128,7 +133,66 @@ export default function BuyerDashboardPage() {
         </Card>
       </div>
 
-      {/* Removed Tabs for Won Auctions and Transactions */}
+      {/* New section for Favorite Lots */}
+      {userProfile.role === "buyer" && (
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Избранные лоты</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {favoriteLots.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {favoriteLots.map((lot) => (
+                    <Card key={lot.id} className="flex flex-col">
+                      <CardHeader className="p-0 relative">
+                        <Image
+                          src={lot.image || "/placeholder.svg"}
+                          alt={lot.name}
+                          width={300}
+                          height={200}
+                          className="rounded-t-md object-cover w-full h-48"
+                        />
+                        <div className="absolute top-2 right-2">
+                          <FavoriteButton lotId={lot.id} initialIsFavorited={true} />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4 flex-grow">
+                        <h3 className="text-lg font-semibold">{lot.name}</h3>
+                        <p className="text-sm text-muted-foreground mb-2">{lot.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Текущая ставка: {lot.currentBid.toLocaleString("ru-RU")} ₽
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Аукцион:{" "}
+                          <Link
+                            href={`/auctions/${lot.lots?.auction_id}`}
+                            className="font-bold text-primary hover:underline"
+                          >
+                            {lot.auctionTitle}
+                          </Link>
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Начало: {new Date(lot.auctionStartTime).toLocaleString()}
+                        </p>
+                      </CardContent>
+                      <div className="p-4 border-t">
+                        <Link href={`/lots/${lot.id}`} passHref>
+                          <Button variant="outline" className="w-full bg-transparent">
+                            Подробнее о лоте
+                          </Button>
+                        </Link>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground text-center">У вас пока нет избранных лотов.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   )
 }

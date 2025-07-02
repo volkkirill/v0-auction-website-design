@@ -11,9 +11,12 @@ import {
   fetchLotByIdForClient,
   fetchAuctionByIdForClient,
   fetchAuctionHouseByIdForClient,
-} from "@/app/actions/data-fetching" // Import new Server Actions
-import { placeBid } from "@/app/actions/bidding" // Import the new bidding action
-import { useRouter } from "next/navigation" // Import useRouter
+} from "@/app/actions/data-fetching"
+import { placeBid } from "@/app/actions/bidding"
+import { useRouter } from "next/navigation"
+import { FavoriteButton } from "@/components/favorite-button" // Import FavoriteButton
+import { createClient } from "@/supabase/client" // Import client Supabase
+import { fetchUserFavoriteLotIds } from "@/app/actions/favorites" // Import favorite action
 
 // Helper function to determine bid increment based on current price
 const getBidIncrement = (currentPrice: number): number => {
@@ -35,10 +38,13 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
   const [auction, setAuction] = useState<any>(null)
   const [auctionHouse, setAuctionHouse] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [bidAmount, setBidAmount] = useState<number | string>("") // State for bid input
+  const [bidAmount, setBidAmount] = useState<number | string>("")
   const [bidState, bidAction, isBidPending] = useActionState(placeBid, { error: null, success: false })
+  const [isFavorited, setIsFavorited] = useState(false) // Local state for favorite status
+  const [userRole, setUserRole] = useState<string | null>(null) // To check if buyer
 
-  const router = useRouter() // Initialize useRouter
+  const router = useRouter()
+  const supabase = createClient() // Initialize client Supabase
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,18 +59,37 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
           const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(fetchedAuction.auction_house_id)
           setAuctionHouse(fetchedAuctionHouse)
         }
-        // Set initial bid amount to current bid + min increment
         setBidAmount(fetchedLot.current_bid + getBidIncrement(fetchedLot.current_bid))
+      }
+
+      // Fetch user and favorite status
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+      if (user && !userError) {
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single()
+        if (profile && !profileError) {
+          setUserRole(profile.role)
+          if (profile.role === "buyer") {
+            const favoriteLotIds = await fetchUserFavoriteLotIds()
+            setIsFavorited(favoriteLotIds.includes(lotId))
+          }
+        }
       }
       setLoading(false)
     }
     fetchData()
-  }, [lotId])
+  }, [lotId, supabase]) // Add supabase to dependency array
 
   // Re-fetch lot data if a bid was successful using router.refresh()
   useEffect(() => {
     if (bidState.success) {
-      router.refresh() // Refresh the current page to show updated bid
+      router.refresh()
     }
   }, [bidState.success, router])
 
@@ -83,7 +108,7 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
     lot.current_bid + minBidIncrement,
     lot.current_bid + minBidIncrement * 2,
     lot.current_bid + minBidIncrement * 5,
-  ].map((bid) => bid * (1 + lot.commission_rate)) // Calculate total price for suggested bids
+  ].map((bid) => bid * (1 + lot.commission_rate))
 
   const handleBidSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault() // Prevent default form submission
@@ -124,7 +149,12 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
 
         {/* Lot Details and Bidding */}
         <div>
-          <h1 className="text-4xl font-bold mb-4">{lot.name}</h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-4xl font-bold">{lot.name}</h1>
+            {userRole === "buyer" && ( // Only show favorite button for buyers
+              <FavoriteButton lotId={lot.id} initialIsFavorited={isFavorited} size="default" variant="outline" />
+            )}
+          </div>
           <p className="text-muted-foreground mb-6">{lot.description}</p>
 
           <Card className="mb-6">
@@ -202,7 +232,7 @@ export default function LotDetailsPage({ params }: { params: { id: string } }) {
                         variant="secondary"
                         size="sm"
                         className="bg-secondary text-secondary-foreground"
-                        onClick={() => setBidAmount(Math.round(bid / (1 + lot.commission_rate)))} // Set base bid amount
+                        onClick={() => setBidAmount(Math.round(bid / (1 + lot.commission_rate)))}
                       >
                         {bid.toLocaleString("ru-RU")} ₽
                       </Button>

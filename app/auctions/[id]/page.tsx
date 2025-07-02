@@ -3,12 +3,36 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import Image from "next/image"
-import { getAuctionById, getAuctionHouseById, getLotsByAuctionId } from "@/lib/auction-data" // Import new data functions
+import { getAuctionById, getAuctionHouseById, getLotsByAuctionId } from "@/lib/auction-data"
+import { FavoriteButton } from "@/components/favorite-button" // Import FavoriteButton
+import { createClient } from "@/supabase/server" // Import server Supabase client
+import { fetchUserFavoriteLotIds } from "@/app/actions/favorites" // Import favorite action
 
 export default async function AuctionDetailsPage({ params }: { params: { id: string } }) {
   const auctionId = params.id
 
-  // Find the auction from the centralized data
+  const supabase = createClient()
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser()
+  let userRole: string | null = null
+  let userFavoriteLotIds: string[] = []
+
+  if (user && !userError) {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+    if (profile && !profileError) {
+      userRole = profile.role
+      if (userRole === "buyer") {
+        userFavoriteLotIds = await fetchUserFavoriteLotIds()
+      }
+    }
+  }
+
   const auction = await getAuctionById(auctionId)
 
   if (!auction) {
@@ -35,7 +59,9 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
             {lots.length > 0 ? (
               lots.map((lot) => (
                 <Card key={lot.id} className="flex flex-col">
-                  <CardHeader className="p-0">
+                  <CardHeader className="p-0 relative">
+                    {" "}
+                    {/* Added relative for positioning heart */}
                     <Image
                       src={lot.image_urls?.[0] || "/placeholder.svg"}
                       alt={lot.name}
@@ -43,6 +69,11 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
                       height={200}
                       className="rounded-t-md object-cover w-full h-48"
                     />
+                    {userRole === "buyer" && (
+                      <div className="absolute top-2 right-2">
+                        <FavoriteButton lotId={lot.id} initialIsFavorited={userFavoriteLotIds.includes(lot.id)} />
+                      </div>
+                    )}
                   </CardHeader>
                   <CardContent className="p-4 flex-grow">
                     <CardTitle className="text-lg font-semibold">{lot.name}</CardTitle>
