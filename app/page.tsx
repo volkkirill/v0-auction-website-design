@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import Image from "next/image"
 import { getFeaturedLots, getAllAuctions, getAuctionHouses, images } from "@/lib/auction-data"
 import { RegisterButton } from "@/components/auth/register-button" // Import the new client component
+import { createClient } from "@/supabase/server" // Import server Supabase client
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -37,6 +38,11 @@ export default async function HomePage() {
   const allAuctions = await getAllAuctions()
   const auctionHouses = await getAuctionHouses()
 
+  const supabase = createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser() // Fetch user on server
+
   // Use a subset of allAuctions for upcoming auctions on the homepage
   const upcomingAuctions = allAuctions
     .filter((auction) => auction.status === "upcoming" || auction.status === "active")
@@ -69,7 +75,7 @@ export default async function HomePage() {
               <Link href="/auctions" passHref>
                 <Button className="bg-primary text-primary-foreground hover:bg-primary/90">Посмотреть аукционы</Button>
               </Link>
-              <RegisterButton /> {/* Use the new client component here */}
+              <RegisterButton initialUser={user} />
             </div>
           </div>
 

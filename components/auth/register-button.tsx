@@ -5,20 +5,18 @@ import { createClient } from "@/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
 import { RegistrationDialogContent } from "@/components/auth/registration-dialog-content"
+import type { User as SupabaseUser } from "@supabase/supabase-js" // Import SupabaseUser type
 
-export function RegisterButton() {
-  const [user, setUser] = useState<any>(null)
+interface RegisterButtonProps {
+  initialUser: SupabaseUser | null
+}
+
+export function RegisterButton({ initialUser }: RegisterButtonProps) {
+  const [user, setUser] = useState<SupabaseUser | null>(initialUser) // Initialize with prop
   const supabase = createClient()
 
   useEffect(() => {
-    const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-    }
-    getUser()
-
+    // Only listen for auth state changes, initial state is from SSR
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {

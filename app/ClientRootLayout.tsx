@@ -6,12 +6,15 @@ import { Header } from "@/components/header"
 import { Footer } from "@/components/footer"
 import { usePathname } from "next/navigation" // Import usePathname
 import { useEffect } from "react" // Import useEffect
+import type { User as SupabaseUser } from "@supabase/supabase-js" // Import SupabaseUser type
 
-export function ClientRootLayout({
-  children,
-}: Readonly<{
+interface ClientRootLayoutProps {
   children: React.ReactNode
-}>) {
+  initialUser: SupabaseUser | null
+  initialUserRole: string | null
+}
+
+export function ClientRootLayout({ children, initialUser, initialUserRole }: ClientRootLayoutProps) {
   const pathname = usePathname()
 
   useEffect(() => {
@@ -20,7 +23,7 @@ export function ClientRootLayout({
 
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-      <Header />
+      <Header initialUser={initialUser} initialUserRole={initialUserRole} />
       <main>{children}</main>
       <Footer />
     </ThemeProvider>

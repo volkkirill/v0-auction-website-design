@@ -22,36 +22,22 @@ import { createClient } from "@/supabase/client"
 import type { User as SupabaseUser } from "@supabase/supabase-js"
 import { RegistrationDialogContent } from "@/components/auth/registration-dialog-content" // Import new component
 
-export function Header() {
+interface HeaderProps {
+  initialUser: SupabaseUser | null
+  initialUserRole: string | null
+}
+
+export function Header({ initialUser, initialUserRole }: HeaderProps) {
   const { theme, setTheme } = useTheme()
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [loginState, loginAction, isLoginPending] = useActionState(signIn, { error: null })
-  const [user, setUser] = useState<SupabaseUser | null>(null)
-  const [userRole, setUserRole] = useState<string | null>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(initialUser) // Initialize with prop
+  const [userRole, setUserRole] = useState<string | null>(initialUserRole) // Initialize with prop
 
   const supabase = createClient()
 
   useEffect(() => {
-    const getUserAndRole = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      setUser(user)
-
-      if (user) {
-        const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-        if (profile && !error) {
-          setUserRole(profile.role)
-        } else {
-          setUserRole("buyer")
-        }
-      } else {
-        setUserRole(null)
-      }
-    }
-
-    getUserAndRole()
-
+    // Only listen for auth state changes, initial state is from SSR
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
