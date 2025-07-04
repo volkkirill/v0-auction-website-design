@@ -99,7 +99,6 @@ export default function SupportPage() {
             <AccordionItem key={index} value={`item-${index}`}>
               <AccordionTrigger className="text-left text-base md:text-lg">
                 {item.question}
-                <ChevronDown className="h-4 w-4 shrink-0 transition-transform duration-200" />
               </AccordionTrigger>
               <AccordionContent className="text-muted-foreground text-sm md:text-base">{item.answer}</AccordionContent>
             </AccordionItem>
