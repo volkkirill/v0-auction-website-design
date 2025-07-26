@@ -24,6 +24,22 @@ import { useRouter } from "next/navigation" // Import useRouter
 import Image from "next/image"
 import { Checkbox } from "@/components/ui/checkbox"
 
+// Функция для конвертации UTC времени в локальное время для input datetime-local
+const formatDateTimeLocal = (utcDateString: string) => {
+  if (!utcDateString) return ""
+  const date = new Date(utcDateString)
+  // Получаем локальное время пользователя
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 16)
+}
+
+// Функция для конвертации локального времени в UTC для сохранения
+const convertToUTC = (localDateTimeString: string) => {
+  if (!localDateTimeString) return ""
+  const localDate = new Date(localDateTimeString)
+  return localDate.toISOString()
+}
+
 export default function EditAuctionPage({ params }: { params: { id: string } }) {
   const auctionId = params.id
   const [auction, setAuction] = useState<any>(null)
@@ -137,12 +153,22 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
       const formData = new FormData()
       formData.append("file", file)
       formData.append("folder", "auction_images")
-      const result = await uploadAction(formData)
-      console.log("Auction image upload result:", result)
-      if (result.success && result.url && result.url.length > 0) {
-        setAuctionImageUrl(result.url)
-      } else {
-        alert(result.error || "Ошибка загрузки изображения аукциона: URL не получен или пуст.")
+
+      try {
+        const result = await uploadAction(formData)
+        console.log("Auction image upload result:", result)
+        if (result && result.success && result.url && result.url.length > 0) {
+          setAuctionImageUrl(result.url)
+          console.log("Image URL set to:", result.url)
+        } else {
+          console.error("Upload failed:", result)
+          alert(result?.error || "Ошибка загрузки изображения аукциона: URL не получен или пуст.")
+          setAuctionImageUrl(null)
+        }
+      } catch (error) {
+        console.error("Upload error:", error)
+        alert("Ошибка при загрузке изображения")
+        setAuctionImageUrl(null)
       }
     }
   }
@@ -215,6 +241,11 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
     auctionFormData.append("auctionHouseId", auctionHouseId)
     auctionFormData.append("image_url", auctionImageUrl || "")
     auctionFormData.append("status", isDraft ? "draft" : "upcoming")
+
+    // Конвертируем локальное время в UTC перед отправкой
+    const startTimeLocal = auctionFormData.get("start_time") as string
+    const startTimeUTC = convertToUTC(startTimeLocal)
+    auctionFormData.set("start_time", startTimeUTC)
 
     const result = await auctionAction(auctionFormData)
     if (result.error) {
@@ -334,7 +365,7 @@ export default function EditAuctionPage({ params }: { params: { id: string } }) 
                     id="start_time"
                     name="start_time"
                     type="datetime-local"
-                    defaultValue={auction.start_time.substring(0, 16)} // Format for datetime-local input
+                    defaultValue={formatDateTimeLocal(auction.start_time)}
                     required
                   />
                 </div>

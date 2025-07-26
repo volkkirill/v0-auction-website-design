@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Image from "next/image"
 import { getFeaturedLots, getAllAuctions, getAuctionHouses, images } from "@/lib/auction-data"
-import { RegisterButton } from "@/components/auth/register-button" // Import the new client component
-import { createClient } from "@/supabase/server" // Import server Supabase client
+import { RegisterButton } from "@/components/auth/register-button"
+import { createClient } from "@/supabase/server"
+import { Clock, Gavel } from "lucide-react"
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -33,6 +34,19 @@ const formatTimeRemaining = (startTime: string) => {
   return timeString.trim()
 }
 
+// Helper function to format display time
+const formatDisplayTime = (utcDateString: string) => {
+  if (!utcDateString) return ""
+  const date = new Date(utcDateString)
+  return date.toLocaleString("ru-RU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export default async function HomePage() {
   const featuredLots = await getFeaturedLots()
   const allAuctions = await getAllAuctions()
@@ -41,7 +55,7 @@ export default async function HomePage() {
   const supabase = createClient()
   const {
     data: { user },
-  } = await supabase.auth.getUser() // Fetch user on server
+  } = await supabase.auth.getUser()
 
   // Use a subset of allAuctions for upcoming auctions on the homepage
   const upcomingAuctions = allAuctions
@@ -55,8 +69,8 @@ export default async function HomePage() {
         <Image
           src={images.heroBg || "/placeholder.svg"}
           alt="Background"
-          layout="fill"
-          objectFit="cover"
+          fill
+          style={{ objectFit: "cover" }}
           quality={100}
           className="absolute inset-0 z-0 opacity-10"
         />
@@ -118,7 +132,7 @@ export default async function HomePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {upcomingAuctions.length > 0 ? (
               upcomingAuctions.map((auction) => {
-                const timeRemaining = formatTimeRemaining(auction.start_time) // Use start_time
+                const timeRemaining = formatTimeRemaining(auction.start_time)
                 const auctionHouse = auctionHouses.find((ah) => ah.id === auction.auction_house_id)
                 return (
                   <Card
@@ -126,28 +140,28 @@ export default async function HomePage() {
                     className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300 relative flex flex-col"
                   >
                     <CardHeader className="p-0">
-                      <Image
-                        src={auction.image_url || "/placeholder.svg"}
-                        alt={auction.title}
-                        width={300}
-                        height={200}
-                        className="rounded-t-md object-cover w-full h-48"
-                      />
-                      {timeRemaining && (
-                        <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-md">
-                          Начнется через: {timeRemaining}
-                        </div>
-                      )}
+                      <div className="relative">
+                        <Image
+                          src={auction.image_url || "/placeholder.svg"}
+                          alt={auction.title}
+                          width={300}
+                          height={200}
+                          className="rounded-t-md object-cover w-full h-48"
+                        />
+                        {timeRemaining && (
+                          <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-md">
+                            Начнется через: {timeRemaining}
+                          </div>
+                        )}
+                      </div>
                     </CardHeader>
                     <CardContent className="p-4 space-y-2 flex-grow">
-                      {" "}
-                      {/* Added flex-grow for consistent card height */}
                       <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
                       <CardDescription className="text-sm text-muted-foreground">{auction.description}</CardDescription>
-                      <p className="text-sm text-muted-foreground">
-                        Дата:{" "}
-                        <span className="font-bold text-primary">{new Date(auction.start_time).toLocaleString()}</span>
-                      </p>
+                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span className="font-bold text-primary">{formatDisplayTime(auction.start_time)}</span>
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         Аукционный дом:{" "}
                         <Link
@@ -157,9 +171,12 @@ export default async function HomePage() {
                           {auctionHouse?.name || "Неизвестно"}
                         </Link>
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        Комиссия: <span className="font-bold text-primary">{auction.commission_percentage}%</span>
-                      </p>
+                      {auction.commission_percentage && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Gavel className="h-4 w-4" />
+                          <span className="font-bold text-primary">{auction.commission_percentage}%</span>
+                        </div>
+                      )}
                     </CardContent>
                     <div className="p-4 pt-0">
                       <Link href={`/auctions/${auction.id}`} passHref>

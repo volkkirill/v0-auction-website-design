@@ -7,8 +7,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
 import { fetchAllAuctionsForClient, fetchAuctionHousesForClient } from "@/app/actions/data-fetching"
+import { Clock, Users, Gavel } from "lucide-react"
 
 // Helper function to format time remaining until auction starts
 const formatTimeRemaining = (startTime: string) => {
@@ -37,6 +39,19 @@ const formatTimeRemaining = (startTime: string) => {
   return timeString.trim()
 }
 
+// Helper function to format display time
+const formatDisplayTime = (utcDateString: string) => {
+  if (!utcDateString) return ""
+  const date = new Date(utcDateString)
+  return date.toLocaleString("ru-RU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
 export default function AuctionsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState("all")
@@ -48,11 +63,16 @@ export default function AuctionsPage() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true)
-      const fetchedAuctions = await fetchAllAuctionsForClient()
-      const fetchedAuctionHouses = await fetchAuctionHousesForClient()
-      setAuctions(fetchedAuctions)
-      setAuctionHouses(fetchedAuctionHouses)
-      setLoading(false)
+      try {
+        const fetchedAuctions = await fetchAllAuctionsForClient()
+        const fetchedAuctionHouses = await fetchAuctionHousesForClient()
+        setAuctions(fetchedAuctions)
+        setAuctionHouses(fetchedAuctionHouses)
+      } catch (error) {
+        console.error("Error fetching data:", error)
+      } finally {
+        setLoading(false)
+      }
     }
     fetchData()
   }, [])
@@ -74,6 +94,20 @@ export default function AuctionsPage() {
     })
 
   const categories = Array.from(new Set(auctions.map((auction) => auction.category)))
+
+  const statusColors = {
+    upcoming: "bg-blue-100 text-blue-800",
+    active: "bg-green-100 text-green-800",
+    live: "bg-green-100 text-green-800",
+    completed: "bg-gray-100 text-gray-800",
+  }
+
+  const statusLabels = {
+    upcoming: "Предстоящий",
+    active: "Активный",
+    live: "Идет торг",
+    completed: "Завершен",
+  }
 
   if (loading) {
     return <div className="container py-8 text-center">Загрузка аукционов...</div>
@@ -119,6 +153,7 @@ export default function AuctionsPage() {
                 <SelectItem value="all">Все</SelectItem>
                 <SelectItem value="active">Активные</SelectItem>
                 <SelectItem value="upcoming">Предстоящие</SelectItem>
+                <SelectItem value="live">Живые торги</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -151,7 +186,7 @@ export default function AuctionsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredAuctions.length > 0 ? (
               filteredAuctions.map((auction) => {
-                const timeRemaining = formatTimeRemaining(auction.start_time) // Use start_time
+                const timeRemaining = formatTimeRemaining(auction.start_time)
                 const auctionHouse = auctionHouses.find((ah) => ah.id === auction.auction_house_id)
                 return (
                   <Card
@@ -159,36 +194,49 @@ export default function AuctionsPage() {
                     className="bg-card text-card-foreground border-border hover:shadow-xl transition-shadow duration-300 relative flex flex-col"
                   >
                     <CardHeader className="p-0">
-                      <Image
-                        src={auction.image_url || "/placeholder.svg"}
-                        alt={auction.title}
-                        width={300}
-                        height={200}
-                        className="rounded-t-md object-cover w-full h-48"
-                      />
-                      {timeRemaining && (
-                        <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-md">
-                          Начнется через: {timeRemaining}
+                      <div className="relative">
+                        <Image
+                          src={auction.image_url || "/placeholder.svg"}
+                          alt={auction.title}
+                          width={300}
+                          height={200}
+                          className="rounded-t-md object-cover w-full h-48"
+                        />
+                        {timeRemaining && (
+                          <div className="absolute top-2 right-2 bg-secondary text-secondary-foreground px-3 py-1 rounded-full text-xs font-semibold shadow-md">
+                            Начнется через: {timeRemaining}
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2">
+                          <Badge className={statusColors[auction.status as keyof typeof statusColors]}>
+                            {statusLabels[auction.status as keyof typeof statusLabels]}
+                          </Badge>
                         </div>
-                      )}
+                      </div>
                     </CardHeader>
                     <CardContent className="p-4 space-y-2 flex-grow">
-                      {" "}
-                      {/* Added flex-grow for consistent card height */}
                       <CardTitle className="text-lg font-semibold text-foreground">{auction.title}</CardTitle>
-                      <CardDescription className="text-sm text-muted-foreground">{auction.description}</CardDescription>
-                      <p className="text-sm text-muted-foreground">
-                        Дата: {new Date(auction.start_time).toLocaleString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Статус:{" "}
-                        {auction.status === "active"
-                          ? "Активный"
-                          : auction.status === "upcoming"
-                            ? "Предстоящий"
-                            : "Завершен"}
-                      </p>
-                      <p className="text-sm text-muted-foreground">Категория: {auction.category}</p>
+                      <CardDescription className="text-sm text-muted-foreground line-clamp-2">
+                        {auction.description}
+                      </CardDescription>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-4 w-4" />
+                          <span>{formatDisplayTime(auction.start_time)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Users className="h-4 w-4" />
+                          <span>Категория: {auction.category}</span>
+                        </div>
+                      </div>
+                      {auction.commission_percentage && (
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <Gavel className="h-4 w-4" />
+                          <span>Комиссия: {auction.commission_percentage}%</span>
+                        </div>
+                      )}
                       <p className="text-sm text-muted-foreground">
                         Аукционный дом:{" "}
                         <Link

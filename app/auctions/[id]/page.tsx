@@ -10,6 +10,27 @@ import { createClient } from "@/supabase/server"
 import { fetchUserFavoriteLotIds } from "@/app/actions/favorites"
 import { Clock, Users, Gavel } from "lucide-react"
 
+// Helper function to format display time
+const formatDisplayTime = (utcDateString: string) => {
+  if (!utcDateString) return ""
+  const date = new Date(utcDateString)
+  return date.toLocaleString("ru-RU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  })
+}
+
+// Helper function to check if auction is accessible (1 hour before start)
+const isAuctionAccessible = (startTime: string) => {
+  const now = new Date()
+  const auctionStart = new Date(startTime)
+  const oneHourBefore = new Date(auctionStart.getTime() - 60 * 60 * 1000)
+  return now >= oneHourBefore
+}
+
 export default async function AuctionDetailsPage({ params }: { params: { id: string } }) {
   const auctionId = params.id
 
@@ -52,6 +73,22 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
   const isLive = auction.is_live
   const hasStarted = now >= auctionStart
 
+  const statusColors = {
+    upcoming: "bg-blue-100 text-blue-800",
+    active: "bg-green-100 text-green-800",
+    live: "bg-green-100 text-green-800",
+    completed: "bg-gray-100 text-gray-800",
+    draft: "bg-yellow-100 text-yellow-800",
+  }
+
+  const statusLabels = {
+    upcoming: "Предстоящий",
+    active: "Активный",
+    live: "Идет торг",
+    completed: "Завершен",
+    draft: "Черновик",
+  }
+
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
       <div className="grid md:grid-cols-2 gap-8">
@@ -60,11 +97,14 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
           <div className="flex items-center gap-4 mb-4">
             <h1 className="text-4xl font-bold">{auction.title}</h1>
             {isLive && (
-              <Badge className="bg-green-500">
+              <Badge className="bg-green-500 text-white">
                 <Gavel className="w-4 h-4 mr-1" />
                 LIVE
               </Badge>
             )}
+            <Badge className={statusColors[auction.status as keyof typeof statusColors]}>
+              {statusLabels[auction.status as keyof typeof statusLabels]}
+            </Badge>
           </div>
 
           <p className="text-muted-foreground mb-6">{auction.description}</p>
@@ -72,7 +112,7 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
           <div className="space-y-2 mb-6">
             <p className="text-sm text-muted-foreground">
               <Clock className="w-4 h-4 inline mr-2" />
-              Начало аукциона: <span className="font-bold text-primary">{auctionStart.toLocaleString("ru-RU")}</span>
+              Начало аукциона: <span className="font-bold text-primary">{formatDisplayTime(auction.start_time)}</span>
             </p>
 
             {showLiveLink && (
