@@ -1,271 +1,415 @@
 "use client"
 
-import React, { useState, useEffect, useActionState } from "react"
-import { Input } from "@/components/ui/input"
-import Link from "next/link"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import Image from "next/image"
-import {
-  fetchLotByIdForClient,
-  fetchAuctionByIdForClient,
-  fetchAuctionHouseByIdForClient,
-} from "@/app/actions/data-fetching"
-import { placeBid } from "@/app/actions/bidding"
-import { useRouter } from "next/navigation"
-import { FavoriteButton } from "@/components/favorite-button"
-import { createClient } from "@/supabase/client"
-import { fetchUserFavoriteLotIds } from "@/app/actions/favorites"
+import type React from "react"
 
-// Helper function to determine bid increment based on current price
-const getBidIncrement = (currentPrice: number): number => {
-  if (currentPrice < 100000) {
-    return 1000 // 1,000 RUB
-  } else if (currentPrice < 500000) {
-    return 5000 // 5,000 RUB
-  } else if (currentPrice < 1000000) {
-    return 10000 // 10,000 RUB
-  } else {
-    return 50000 // 50,000 RUB
+import { useEffect, useState, useActionState } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import Image from "next/image"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, Clock, Gavel, Users } from "lucide-react"
+import { createClient } from "@/supabase/client"
+import { FavoriteButton } from "@/components/favorite-button"
+import { placeBid } from "@/app/actions/bidding"
+
+interface Lot {
+  id: string
+  name: string
+  description: string
+  initial_price: number
+  current_bid: number
+  bid_count: number
+  image_urls: string[] | null
+  auction_id: string
+  status: string
+  auctions: {
+    id: string
+    title: string
+    start_time: string
+    is_live: boolean
+    current_lot_id: string | null
   }
 }
 
-export default function LotDetailsPage({ params }: { params: { id: string } }) {
-  const lotId = params.id
-  const [showBidIncrementHint, setShowBidIncrementHint] = useState(false)
-  const [lot, setLot] = useState<any>(null)
-  const [auction, setAuction] = useState<any>(null)
-  const [auctionHouse, setAuctionHouse] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
-  const [bidAmount, setBidAmount] = useState<number | string>("")
-  const [bidState, bidAction, isBidPending] = useActionState(placeBid, { error: null, success: false })
-  const [isLotFavorited, setIsLotFavorited] = useState(false) // State to pass to FavoriteButton
-  const [userRole, setUserRole] = useState<string | null>(null)
+interface Bid {
+  id: string
+  amount: number
+  created_at: string
+  profiles: {
+    full_name: string | null
+  } | null
+}
 
+export default function LotDetailsPage({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const lotId = params.id
+
+  const [lot, setLot] = useState<Lot | null>(null)
+  const [bids, setBids] = useState<Bid[]>([])
+  const [userRole, setUserRole] = useState<string | null>(null)
+  const [userFavoriteLotIds, setUserFavoriteLotIds] = useState<string[]>([])
+  const [bidAmount, setBidAmount] = useState("")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const [bidState, bidAction, isBidding] = useActionState(placeBid, { error: null, success: false })
+
   const supabase = createClient()
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true)
-      const fetchedLot = await fetchLotByIdForClient(lotId)
-      setLot(fetchedLot)
+      try {
+        // Get user info
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (user) {
+          const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
 
-      if (fetchedLot) {
-        const fetchedAuction = await fetchAuctionByIdForClient(fetchedLot.auction_id)
-        setAuction(fetchedAuction)
-        if (fetchedAuction) {
-          const fetchedAuctionHouse = await fetchAuctionHouseByIdForClient(fetchedAuction.auction_house_id)
-          setAuctionHouse(fetchedAuctionHouse)
-        }
-        setBidAmount(fetchedLot.current_bid + getBidIncrement(fetchedLot.current_bid))
-      }
+          if (profile) {
+            setUserRole(profile.role)
 
-      // Fetch user and favorite status
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser()
-      if (user && !userError) {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", user.id)
-          .single()
-        if (profile && !profileError) {
-          setUserRole(profile.role)
-          if (profile.role === "buyer") {
-            const favoriteLotIds = await fetchUserFavoriteLotIds()
-            setIsLotFavorited(favoriteLotIds.includes(lotId))
+            if (profile.role === "buyer") {
+              const { data: favorites } = await supabase.from("user_favorites").select("lot_id").eq("user_id", user.id)
+
+              if (favorites) {
+                setUserFavoriteLotIds(favorites.map((f) => f.lot_id))
+              }
+            }
           }
         }
+
+        // Get lot details
+        const { data: lotData, error: lotError } = await supabase
+          .from("lots")
+          .select(`
+            *,
+            auctions (
+              id,
+              title,
+              start_time,
+              is_live,
+              current_lot_id
+            )
+          `)
+          .eq("id", lotId)
+          .single()
+
+        if (lotError) throw lotError
+        setLot(lotData)
+
+        // Get bid history
+        const { data: bidsData, error: bidsError } = await supabase
+          .from("bids")
+          .select(`
+            id,
+            amount,
+            created_at,
+            profiles:user_id (
+              full_name
+            )
+          `)
+          .eq("lot_id", lotId)
+          .order("created_at", { ascending: false })
+          .limit(10)
+
+        if (bidsError) throw bidsError
+        setBids(bidsData || [])
+      } catch (err) {
+        console.error("Error fetching data:", err)
+        setError("Ошибка загрузки данных лота")
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
+
     fetchData()
   }, [lotId, supabase])
 
-  // Re-fetch lot data if a bid was successful using router.refresh()
+  // Subscribe to real-time updates
   useEffect(() => {
-    if (bidState.success) {
-      router.refresh()
+    if (!lot) return
+
+    const channel = supabase
+      .channel(`lot-${lotId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "lots",
+          filter: `id=eq.${lotId}`,
+        },
+        (payload) => {
+          setLot((prev) => (prev ? { ...prev, ...payload.new } : null))
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "bids",
+          filter: `lot_id=eq.${lotId}`,
+        },
+        () => {
+          // Refetch bids when new bid is inserted
+          const fetchBids = async () => {
+            const { data: bidsData } = await supabase
+              .from("bids")
+              .select(`
+                id,
+                amount,
+                created_at,
+                profiles:user_id (
+                  full_name
+                )
+              `)
+              .eq("lot_id", lotId)
+              .order("created_at", { ascending: false })
+              .limit(10)
+
+            if (bidsData) setBids(bidsData)
+          }
+          fetchBids()
+        },
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
     }
-  }, [bidState.success, router])
+  }, [lot, lotId, supabase])
+
+  const handleBidSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!bidAmount) return
+
+    const formData = new FormData()
+    formData.append("lotId", lotId)
+    formData.append("bidAmount", bidAmount)
+
+    await bidAction(formData)
+
+    if (bidState.success) {
+      setBidAmount("")
+    }
+  }
 
   if (loading) {
-    return <div className="container py-8 text-center">Загрузка лота...</div>
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center">Загрузка лота...</div>
+      </div>
+    )
   }
 
-  if (!lot || !auction || !auctionHouse) {
-    return <div className="container py-8 text-center">Лот не найден.</div>
+  if (error || !lot) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="text-center text-red-500">{error || "Лот не найден"}</div>
+      </div>
+    )
   }
 
-  const minBidIncrement = getBidIncrement(lot.current_bid)
-  const currentBidWithCommission = lot.current_bid * (1 + lot.commission_rate)
-
-  const suggestedBids = [
-    lot.current_bid + minBidIncrement,
-    lot.current_bid + minBidIncrement * 2,
-    lot.current_bid + minBidIncrement * 5,
-  ].map((bid) => bid * (1 + lot.commission_rate))
-
-  const handleBidSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault() // Prevent default form submission
-    const formData = new FormData(event.currentTarget)
-    formData.append("lotId", lotId)
-    formData.append("bidAmount", String(bidAmount)) // Use the state value
-    await bidAction(formData)
-  }
+  const isLiveAuction = lot.auctions.is_live
+  const isCurrentLot = lot.auctions.current_lot_id === lot.id
+  const canBid = userRole === "buyer" && (!isLiveAuction || isCurrentLot)
 
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
+      <div className="mb-6">
+        <Button variant="ghost" onClick={() => router.back()} className="mb-4">
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Назад
+        </Button>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-8">
-        {/* Lot Images */}
+        {/* Lot Images and Details */}
         <div>
-          <div className="relative w-full h-[400px] rounded-lg overflow-hidden mb-4">
-            <Image
-              src={lot.image_urls?.[0] || "/placeholder.svg"}
-              alt={lot.name}
-              layout="fill"
-              objectFit="cover"
-              className="rounded-lg"
-            />
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {lot.image_urls?.map((img: string, index: number) => (
-              <div key={index} className="relative w-full h-24 rounded-md overflow-hidden cursor-pointer">
-                <Image
-                  src={img || "/placeholder.svg"}
-                  alt={`${lot.name} - ${index + 1}`}
-                  layout="fill"
-                  objectFit="cover"
-                  className="rounded-md hover:opacity-75 transition-opacity"
+          <div className="relative w-full h-[500px] rounded-lg overflow-hidden mb-6">
+            <Image src={lot.image_urls?.[0] || "/placeholder.svg"} alt={lot.name} fill className="object-cover" />
+            {userRole === "buyer" && (
+              <div className="absolute top-4 right-4">
+                <FavoriteButton
+                  lotId={lot.id}
+                  initialIsFavorited={userFavoriteLotIds.includes(lot.id)}
+                  size="default"
+                  variant="secondary"
                 />
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Lot Details and Bidding */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-4xl font-bold">{lot.name}</h1>
-            {userRole === "buyer" && (
-              <FavoriteButton lotId={lot.id} initialIsFavorited={isLotFavorited} size="default" variant="outline" />
             )}
           </div>
-          <p className="text-muted-foreground mb-6">{lot.description}</p>
 
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>Информация о ставке</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-lg">
-                Начальная цена:{" "}
-                <span className="font-bold text-primary">{lot.initial_price.toLocaleString("ru-RU")} ₽</span>
-              </p>
-              <p className="text-lg">
-                Текущая ставка:{" "}
-                <span className="font-bold text-primary">{lot.current_bid.toLocaleString("ru-RU")} ₽</span>
-              </p>
-              <p className="text-lg">
-                Комиссия аукционного дома:{" "}
-                <span className="font-bold text-primary">{(lot.commission_rate * 100).toFixed(0)}%</span>
-              </p>
-              <p className="text-lg">
-                Итоговая цена с комиссией (при выигрыше):{" "}
-                <span className="font-bold text-primary">{currentBidWithCommission.toLocaleString("ru-RU")} ₽</span>
-              </p>
-              <p className="text-sm text-muted-foreground">Количество ставок: {lot.bid_count}</p>
-            </CardContent>
-            <CardFooter className="flex flex-col gap-2">
-              <form onSubmit={handleBidSubmit} className="w-full flex flex-col gap-2">
-                <Input
-                  type="number"
-                  placeholder="Ваша ставка"
-                  className="w-full"
-                  name="bidAmount"
-                  value={bidAmount}
-                  onChange={(e) => setBidAmount(e.target.value)}
-                  onFocus={() => setShowBidIncrementHint(true)}
-                  onBlur={() => setShowBidIncrementHint(false)}
-                  min={lot.current_bid + minBidIncrement}
-                />
-                <Button
-                  type="submit"
-                  className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
-                  disabled={isBidPending}
-                >
-                  {isBidPending ? "Делаем ставку..." : "Сделать ставку"}
-                </Button>
-                {bidState?.error && <p className="text-red-500 text-sm mt-2">{bidState.error}</p>}
-                {bidState?.success && <p className="text-green-500 text-sm mt-2">Ставка успешно сделана!</p>}
-              </form>
-              {showBidIncrementHint && (
-                <div className="mt-4 bg-accent text-accent-foreground p-4 rounded-md shadow-md w-full">
-                  <p className="text-sm font-semibold mb-2">Правила шага ставки:</p>
-                  <div className="grid grid-cols-2 gap-2 text-sm">
-                    <div className="font-medium">Текущая цена</div>
-                    <div className="font-medium">Шаг ставки</div>
-                    <Separator className="col-span-2" />
-                    {[
-                      { range: "До 100 000 ₽", increment: "1 000 ₽" },
-                      { range: "От 100 000 ₽ до 500 000 ₽", increment: "5 000 ₽" },
-                      { range: "От 500 000 ₽ до 1 000 000 ₽", increment: "10 000 ₽" },
-                      { range: "Свыше 1 000 000 ₽", increment: "50 000 ₽" },
-                    ].map((rule, index) => (
-                      <React.Fragment key={index}>
-                        <div>{rule.range}</div>
-                        <div>{rule.increment}</div>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                  <p className="text-sm font-semibold mt-4 mb-2">
-                    Предлагаемые ставки (включая комиссию {lot.commission_rate * 100}%):
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {suggestedBids.map((bid, index) => (
-                      <Button
-                        key={index}
-                        variant="secondary"
-                        size="sm"
-                        className="bg-secondary text-secondary-foreground"
-                        onClick={() => setBidAmount(Math.round(bid / (1 + lot.commission_rate)))}
-                      >
-                        {bid.toLocaleString("ru-RU")} ₽
-                      </Button>
-                    ))}
-                  </div>
+          {lot.image_urls && lot.image_urls.length > 1 && (
+            <div className="grid grid-cols-4 gap-2">
+              {lot.image_urls.slice(1, 5).map((url, index) => (
+                <div key={index} className="relative h-20 rounded-md overflow-hidden">
+                  <Image
+                    src={url || "/placeholder.svg"}
+                    alt={`${lot.name} ${index + 2}`}
+                    fill
+                    className="object-cover"
+                  />
                 </div>
-              )}
-            </CardFooter>
-          </Card>
+              ))}
+            </div>
+          )}
+        </div>
 
-          <Separator className="my-8" />
-
+        {/* Lot Info and Bidding */}
+        <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Информация об аукционе</CardTitle>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-2xl">{lot.name}</CardTitle>
+                  <CardDescription className="mt-2">
+                    Аукцион:{" "}
+                    <Link href={`/auctions/${lot.auctions.id}`} className="text-primary hover:underline">
+                      {lot.auctions.title}
+                    </Link>
+                  </CardDescription>
+                </div>
+                {isLiveAuction && (
+                  <Badge className="bg-green-500">
+                    <Gavel className="w-4 h-4 mr-1" />
+                    LIVE
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Аукцион:{" "}
-                <Link href={`/auctions/${auction.id}`} className="font-bold text-primary hover:underline">
-                  {auction.title}
-                </Link>
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Аукционный дом:{" "}
-                <Link href={`/auction-houses/${auctionHouse.id}`} className="font-bold text-primary hover:underline">
-                  {auctionHouse.name}
-                </Link>
-              </p>
-              <p className="text-sm text-muted-foreground">Категория: {lot.category}</p>
-              <p className="text-sm text-muted-foreground">
-                Начало торгов: {new Date(auction.start_time).toLocaleString()}
-              </p>
+            <CardContent>
+              <p className="text-muted-foreground leading-relaxed mb-4">{lot.description}</p>
+
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Стартовая цена</p>
+                  <p className="text-lg font-semibold">{lot.initial_price.toLocaleString("ru-RU")} ₽</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Текущая ставка</p>
+                  <p className="text-2xl font-bold text-primary">{lot.current_bid.toLocaleString("ru-RU")} ₽</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-1">
+                  <Users className="w-4 h-4" />
+                  <span>{lot.bid_count} ставок</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Начало: {new Date(lot.auctions.start_time).toLocaleString("ru-RU")}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bidding Section */}
+          {canBid ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Сделать ставку</CardTitle>
+                {isLiveAuction && !isCurrentLot && (
+                  <CardDescription className="text-orange-600">
+                    Этот лот сейчас не активен в живом аукционе
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleBidSubmit} className="space-y-4">
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Введите сумму ставки"
+                      value={bidAmount}
+                      onChange={(e) => setBidAmount(e.target.value)}
+                      min={lot.current_bid + 1000}
+                      disabled={isLiveAuction && !isCurrentLot}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Минимальная ставка: {(lot.current_bid + 1000).toLocaleString("ru-RU")} ₽
+                    </p>
+                  </div>
+
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isBidding || !bidAmount || (isLiveAuction && !isCurrentLot)}
+                  >
+                    {isBidding ? "Обработка..." : "Сделать ставку"}
+                  </Button>
+                </form>
+
+                {bidState.error && (
+                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                    <p className="text-red-600 text-sm">{bidState.error}</p>
+                  </div>
+                )}
+
+                {bidState.success && (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
+                    <p className="text-green-600 text-sm">Ставка успешно размещена!</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : isLiveAuction ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <Gavel className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold mb-2">Живой аукцион</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Этот лот участвует в живом аукционе. Присоединяйтесь к торгам!
+                  </p>
+                  <Link href={`/live-auction/${lot.auction_id}`}>
+                    <Button className="bg-green-600 hover:bg-green-700">
+                      <Gavel className="w-4 h-4 mr-2" />
+                      Перейти к торгам
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          ) : userRole !== "buyer" ? (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center text-muted-foreground">
+                  <p>Только зарегистрированные покупатели могут делать ставки</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {/* Bid History */}
+          <Card>
+            <CardHeader>
+              <CardTitle>История ставок</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {bids.length === 0 ? (
+                <div className="text-center text-muted-foreground py-4">Ставок пока нет</div>
+              ) : (
+                <div className="space-y-3">
+                  {bids.map((bid, index) => (
+                    <div key={bid.id} className="flex justify-between items-center">
+                      <div>
+                        <p className="font-medium">{bid.profiles?.full_name || `Участник ${index + 1}`}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(bid.created_at).toLocaleString("ru-RU")}
+                        </p>
+                      </div>
+                      <p className="font-bold text-lg">{bid.amount.toLocaleString("ru-RU")} ₽</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -2,11 +2,13 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import Image from "next/image"
 import { getAuctionById, getAuctionHouseById, getLotsByAuctionId } from "@/lib/auction-data"
 import { FavoriteButton } from "@/components/favorite-button"
 import { createClient } from "@/supabase/server"
 import { fetchUserFavoriteLotIds } from "@/app/actions/favorites"
+import { Clock, Users, Gavel } from "lucide-react"
 
 export default async function AuctionDetailsPage({ params }: { params: { id: string } }) {
   const auctionId = params.id
@@ -42,17 +44,72 @@ export default async function AuctionDetailsPage({ params }: { params: { id: str
   const lots = await getLotsByAuctionId(auction.id)
   const currentAuctionHouse = await getAuctionHouseById(auction.auction_house_id)
 
+  // Check if live auction should be available (1 hour before start)
+  const now = new Date()
+  const auctionStart = new Date(auction.start_time)
+  const oneHourBefore = new Date(auctionStart.getTime() - 60 * 60 * 1000)
+  const showLiveLink = now >= oneHourBefore
+  const isLive = auction.is_live
+  const hasStarted = now >= auctionStart
+
   return (
     <div className="container mx-auto px-4 py-8 md:px-6 lg:px-8">
       <div className="grid md:grid-cols-2 gap-8">
         {/* Auction Details */}
         <div>
-          <h1 className="text-4xl font-bold mb-4">{auction.title}</h1>
+          <div className="flex items-center gap-4 mb-4">
+            <h1 className="text-4xl font-bold">{auction.title}</h1>
+            {isLive && (
+              <Badge className="bg-green-500">
+                <Gavel className="w-4 h-4 mr-1" />
+                LIVE
+              </Badge>
+            )}
+          </div>
+
           <p className="text-muted-foreground mb-6">{auction.description}</p>
-          <p className="text-sm text-muted-foreground mb-6">
-            Начало аукциона:{" "}
-            <span className="font-bold text-primary">{new Date(auction.start_time).toLocaleString()}</span>
-          </p>
+
+          <div className="space-y-2 mb-6">
+            <p className="text-sm text-muted-foreground">
+              <Clock className="w-4 h-4 inline mr-2" />
+              Начало аукциона: <span className="font-bold text-primary">{auctionStart.toLocaleString("ru-RU")}</span>
+            </p>
+
+            {showLiveLink && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                {isLive ? (
+                  <div className="text-center">
+                    <p className="text-green-800 font-semibold mb-3">🔴 Аукцион идет прямо сейчас!</p>
+                    <Link href={`/live-auction/${auction.id}`}>
+                      <Button className="bg-green-600 hover:bg-green-700">
+                        <Gavel className="w-4 h-4 mr-2" />
+                        Присоединиться к торгам
+                      </Button>
+                    </Link>
+                  </div>
+                ) : hasStarted ? (
+                  <div className="text-center">
+                    <p className="text-gray-600">Аукцион завершен</p>
+                  </div>
+                ) : (
+                  <div className="text-center">
+                    <p className="text-green-800 font-semibold mb-3">
+                      Аукцион скоро начнется! Вы можете войти в зал ожидания.
+                    </p>
+                    <Link href={`/live-auction/${auction.id}`}>
+                      <Button
+                        variant="outline"
+                        className="border-green-600 text-green-600 hover:bg-green-50 bg-transparent"
+                      >
+                        <Users className="w-4 h-4 mr-2" />
+                        Войти в зал ожидания
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <h2 className="text-2xl font-bold mb-4">Лоты в этом аукционе</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
